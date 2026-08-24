@@ -1,0 +1,1313 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CRS data · 客户中心</title>
+  <script src="iso-countries.js"></script>
+  <style>
+    :root {
+      --nav-bg: #1b2433;
+      --nav-bg-2: #151c28;
+      --nav-hover: #243044;
+      --nav-active: #2c3b52;
+      --nav-text: #c9d2de;
+      --nav-muted: #8b97a8;
+      --accent: #3d7eff;
+      --bar-dark: #5d6570;
+      --bar-mid: #8a9199;
+      --bar-light: #d9dde3;
+      --line: #e6e8ec;
+      --text: #1f2933;
+      --muted: #6b7280;
+      --bg: #f4f6f9;
+      --white: #fff;
+      --danger: #c0392b;
+      --ok: #1a7f4b;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; font-family: "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif; color: var(--text); background: var(--bg); }
+    a { color: inherit; text-decoration: none; }
+    button, input, select, textarea { font-family: inherit; }
+
+    .app { display: flex; min-height: 100%; }
+
+    /* ===== Sidebar (图一) ===== */
+    .sidebar {
+      width: 220px; flex-shrink: 0; background: var(--nav-bg); color: var(--nav-text);
+      display: flex; flex-direction: column; user-select: none;
+    }
+    .brand {
+      height: 56px; display: flex; align-items: center; gap: 10px; padding: 0 16px;
+      background: var(--nav-bg-2); font-weight: 600; letter-spacing: .02em; font-size: 14px;
+    }
+    .brand .logo {
+      width: 28px; height: 28px; border-radius: 6px; background: linear-gradient(135deg,#3d7eff,#6aa4ff);
+      display: grid; place-items: center; color: #fff; font-size: 12px; font-weight: 700;
+    }
+    .nav { padding: 8px 0; overflow: auto; flex: 1; }
+    .nav-item, .nav-sub {
+      display: flex; align-items: center; gap: 10px; height: 42px; padding: 0 16px;
+      cursor: pointer; font-size: 13.5px; color: var(--nav-text);
+    }
+    .nav-item:hover, .nav-sub:hover { background: var(--nav-hover); }
+    .nav-item .chev { margin-left: auto; font-size: 10px; color: var(--nav-muted); }
+    .nav-icon { width: 16px; height: 16px; flex-shrink: 0; opacity: .9; }
+    .nav-sub { padding-left: 42px; height: 40px; font-size: 13px; position: relative; }
+    .nav-sub .nav-icon { position: absolute; left: 18px; }
+    .nav-sub.active { background: var(--nav-active); color: #fff; }
+    .nav-group.open .nav-item { color: #fff; }
+
+    /* ===== Main ===== */
+    .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+    .topbar {
+      height: 56px; background: var(--white); border-bottom: 1px solid var(--line);
+      display: flex; align-items: center; justify-content: space-between; padding: 0 24px;
+    }
+    .crumb { font-size: 13px; color: var(--muted); }
+    .crumb b { color: var(--text); font-weight: 600; }
+    .user-chip { font-size: 12px; color: var(--muted); }
+
+    .content { padding: 18px 24px 40px; overflow: auto; flex: 1; }
+
+    .panel { background: var(--white); border: 1px solid var(--line); border-radius: 6px; }
+    .panel + .panel { margin-top: 14px; }
+
+    .filter { padding: 16px 18px 8px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px 16px; }
+    .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+    .field input, .field select, .field textarea {
+      width: 100%; height: 34px; border: 1px solid #d0d5dd; border-radius: 4px;
+      padding: 0 10px; font-size: 13px; background: #fff; color: var(--text);
+    }
+    .field textarea { height: 64px; padding: 8px 10px; resize: vertical; }
+    .field input:focus, .field select:focus, .field textarea:focus {
+      outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(61,126,255,.15);
+    }
+
+    .toolbar { padding: 8px 18px 16px; display: flex; gap: 8px; flex-wrap: wrap; }
+    .btn {
+      height: 32px; padding: 0 14px; border: 1px solid #d0d5dd; background: #fff; border-radius: 4px;
+      font-size: 13px; cursor: pointer; color: var(--text);
+    }
+    .btn:hover { border-color: #b8c0cc; background: #fafbfc; }
+    .btn-primary { background: #2f6fed; color: #fff; border-color: #2f6fed; }
+    .btn-primary:hover { background: #215ad4; }
+    .btn-warn { background: #fff7ed; color: #9a3412; border-color: #fdba74; }
+    .btn-ghost { background: transparent; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    th, td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+    th { background: #f7f8fa; color: var(--muted); font-weight: 600; font-size: 12px; }
+    tbody tr { cursor: pointer; }
+    tbody tr:hover { background: #f6f8fc; }
+    tbody tr.selected { background: #eef3ff; }
+    .mono { font-family: "SF Mono", Menlo, Consolas, monospace; }
+    .tag { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px; }
+    .tag-ind { background: #e8f1ff; color: #1d4ed8; }
+    .tag-ent { background: #f3e8ff; color: #7e22ce; }
+    .tag-ok { background: #e8f8ef; color: var(--ok); }
+    .link { color: #215ad4; cursor: pointer; }
+    .icon-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 28px; height: 28px; border: none; background: transparent;
+      color: #215ad4; cursor: pointer; border-radius: 4px; padding: 0;
+    }
+    .icon-btn:hover { background: #e8f0fe; }
+    .icon-btn svg { width: 16px; height: 16px; }
+    .icon-btn.view { color: #4b5563; }
+    .icon-btn.view:hover { background: #f3f4f6; }
+    .ops { display: flex; gap: 2px; align-items: center; }
+    .muted { color: var(--muted); }
+    .addr-cell { white-space: pre-line; max-width: 280px; line-height: 1.35; }
+
+    /* ===== Detail ===== */
+    .detail-head {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 14px;
+    }
+    .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--line); margin-bottom: 0; background: #fff; border-radius: 6px 6px 0 0; }
+    .tab {
+      height: 40px; padding: 0 18px; border: none; background: transparent; cursor: pointer;
+      font-size: 13px; color: var(--muted); border-bottom: 2px solid transparent;
+    }
+    .tab.on { color: #215ad4; border-bottom-color: #215ad4; font-weight: 600; }
+
+    .sec-bar {
+      background: var(--bar-dark); color: #fff; font-size: 13px; font-weight: 700;
+      padding: 7px 12px; letter-spacing: .02em;
+    }
+    .sec-bar.light { background: var(--bar-light); color: #1f2933; }
+    .sec-bar.mid { background: #c5ccd4; color: #1f2933; }
+    .sec-body { padding: 12px 14px 6px; background: #fff; }
+    .kv-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px 24px; }
+    .kv { font-size: 13px; line-height: 1.7; padding: 2px 0; }
+    .kv .k { color: #4b5563; }
+    .kv .v { color: #111; }
+    .addr-pre { white-space: pre-line; display: inline; }
+
+    .box { border: 1px solid #cfd5dd; margin: 0 0 12px; background: #fff; }
+    .box .sec-body { padding: 10px 12px 4px; }
+    .fg { display: grid; grid-template-columns: 280px 1fr; gap: 4px 12px; align-items: center; padding: 4px 0; font-size: 13px; }
+    .fg > label { color: #374151; }
+    .fg input, .fg select, .fg textarea {
+      height: 30px; border: 1px solid #d8dee6; border-radius: 3px; padding: 0 8px; font-size: 13px; width: 100%;
+    }
+    .fg input[disabled], .fg select[disabled], .fg textarea[disabled] {
+      background: #f7f8fa; color: #111; cursor: default; border-color: #e6e8ec;
+      opacity: 1; -webkit-text-fill-color: #111;
+    }
+    .fg .hint { grid-column: 2; font-size: 11px; color: #9aa3af; margin-top: -2px; }
+    .fg-pair .pair-controls, .fg-triple .triple-controls {
+      display: grid; gap: 8px; align-items: center;
+    }
+    .fg-pair .pair-controls { grid-template-columns: minmax(140px, 1fr) auto minmax(150px, .75fr); }
+    .fg-triple .triple-controls { grid-template-columns: minmax(120px, 1.1fr) auto minmax(110px, .7fr) auto minmax(130px, .8fr); }
+    .pair-extra-label { color: #6b7280; font-size: 12px; white-space: nowrap; }
+    .module-title {
+      font-size: 14px; font-weight: 700; color: #1f2933;
+      padding: 2px 2px 8px; letter-spacing: .01em;
+    }
+    .nested { margin: 8px 0 10px 0; border: 1px solid #d5dbe3; }
+    .pay-row { display: grid; grid-template-columns: 360px 1fr; gap: 8px; align-items: center; padding: 4px 0; font-size: 13px; }
+
+    .hint-bar {
+      background: #f8fafc; border: 1px dashed #cbd5e1; color: #64748b; font-size: 12px;
+      padding: 8px 12px; margin-bottom: 12px; border-radius: 4px;
+    }
+
+    /* ===== Modal ===== */
+    .overlay {
+      position: fixed; inset: 0; background: rgba(15,23,42,.45); display: none; align-items: center; justify-content: center; z-index: 50;
+    }
+    .overlay.show { display: flex; }
+    .modal { width: min(920px, 92vw); max-height: 86vh; background: #fff; border-radius: 8px; display: flex; flex-direction: column; }
+    .modal h3 { padding: 14px 18px; border-bottom: 1px solid var(--line); font-size: 15px; }
+    .modal .body { padding: 14px 18px; overflow: auto; flex: 1; }
+    .modal .foot { padding: 12px 18px; border-top: 1px solid var(--line); display: flex; justify-content: flex-end; gap: 8px; }
+    pre.xml {
+      background: #0f172a; color: #e2e8f0; padding: 14px; border-radius: 6px; font-size: 12px;
+      overflow: auto; max-height: 52vh; line-height: 1.45;
+    }
+    .toast {
+      position: fixed; top: 18px; right: 18px; background: #111827; color: #fff; padding: 10px 14px;
+      border-radius: 6px; font-size: 13px; display: none; z-index: 80;
+    }
+    .empty { padding: 40px; text-align: center; color: var(--muted); }
+
+    @media (max-width: 1200px) {
+      .filter { grid-template-columns: repeat(2, 1fr); }
+      .kv-grid { grid-template-columns: repeat(2, 1fr); }
+      .fg { grid-template-columns: 200px 1fr; }
+      .fg-pair .pair-controls, .fg-triple .triple-controls { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand"><span class="logo">GH</span>Goldhorse 中台</div>
+      <nav class="nav">
+        <div class="nav-item">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1v-9.5z"/></svg>
+          首页
+        </div>
+        <div class="nav-group open">
+          <div class="nav-item">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3.2"/><path d="M5 19c.8-3.2 3.5-5 7-5s6.2 1.8 7 5"/></svg>
+            客户中心 <span class="chev">▲</span>
+          </div>
+          <div class="nav-sub">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="2.4"/><circle cx="16" cy="9" r="2.1"/><path d="M3.5 19c.6-2.4 2.6-3.8 5.3-3.8 1.3 0 2.4.3 3.3.9"/><path d="M13 19c.5-2 2.2-3.2 4.4-3.2 1.8 0 3.2.8 3.8 2.2"/></svg>
+            客户档案
+          </div>
+          <div class="nav-sub">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="12" cy="11" r="2.2"/><path d="M8 16c.6-1.3 2-2 4-2s3.4.7 4 2"/></svg>
+            开户办理
+          </div>
+          <div class="nav-sub">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="5" width="14" height="14" rx="2"/><path d="M8 12l2.2 2.2L16 9"/></svg>
+            专业投资者
+          </div>
+          <div class="nav-sub">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="3.5" width="14" height="17" rx="1.5"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
+            尽职调查
+          </div>
+          <div class="nav-sub">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 3.5h7l5 5V20a1.5 1.5 0 0 1-1.5 1.5H7A1.5 1.5 0 0 1 5.5 20V5A1.5 1.5 0 0 1 7 3.5z"/><path d="M14 3.5V9h5M8.5 13h7M8.5 16.5h5"/></svg>
+            评估问卷记录
+          </div>
+          <div class="nav-sub">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/></svg>
+            客户换汇
+          </div>
+          <div class="nav-sub active">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8M8 12.5h8M8 16h5"/></svg>
+            CRS data
+          </div>
+        </div>
+      </nav>
+    </aside>
+
+    <section class="main">
+      <header class="topbar">
+        <div class="crumb">客户中心 / <b>CRS data</b></div>
+        <div class="user-chip">Goldhorse Securities Ltd · Demo</div>
+      </header>
+
+      <div class="content" id="view-list">
+        <div class="panel">
+          <div class="filter">
+            <div class="field">
+              <label>申报年份 Reporting Year</label>
+              <select id="q-year"><option value="2025">2025</option><option value="2024">2024</option></select>
+            </div>
+            <div class="field">
+              <label>交易账号 Account Number</label>
+              <input id="q-acct" placeholder="如 100006.001" />
+            </div>
+            <div class="field">
+              <label>CRS Type</label>
+              <select id="q-crs">
+                <option value="">全部</option>
+                <option value="Individual">Individual</option>
+                <option value="Entity">Entity</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Account Holder Type</label>
+              <select id="q-aht">
+                <option value="">全部</option>
+                <option value="CRS101">CRS101</option>
+                <option value="CRS102">CRS102</option>
+                <option value="CRS103">CRS103</option>
+              </select>
+            </div>
+          </div>
+          <div class="toolbar">
+            <button class="btn btn-primary" onclick="search()">查询</button>
+            <button class="btn" onclick="resetFilter()">重置</button>
+            <button class="btn" onclick="openCrs701()">按申报年份生成 CRS701 新报 XML</button>
+            <button class="btn btn-warn" onclick="openCrs702()">勾选记录生成 CRS702 更正/删除 XML</button>
+          </div>
+        </div>
+
+        <div class="panel" style="margin-top:14px; overflow:auto;">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:36px"><input type="checkbox" id="chk-all" onchange="toggleAll(this.checked)" /></th>
+                <th>Client Account</th>
+                <th>CRS Type</th>
+                <th>Account Holder Type</th>
+                <th>Name / Organisation</th>
+                <th>Tax Residency</th>
+                <th>Status</th>
+                <th>A/C Portfolio</th>
+                <th>Return Year</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="tbody"></tbody>
+          </table>
+          <div id="list-empty" class="empty" style="display:none">无匹配记录</div>
+        </div>
+      </div>
+
+      <div class="content" id="view-detail" style="display:none">
+        <div class="detail-head">
+          <button class="btn" onclick="backList()">← 返回列表</button>
+          <div style="font-size:16px;font-weight:650" id="detail-title">详情</div>
+          <span class="muted" id="detail-sub"></span>
+          <div style="margin-left:auto; display:flex; gap:8px">
+            <button class="btn" id="btn-save" onclick="saveDetail()">保存修改</button>
+            <button class="btn btn-primary" onclick="openCrs702(currentId)">本条生成 CRS702</button>
+          </div>
+        </div>
+        <div class="hint-bar" id="detail-hint"></div>
+        <div class="panel">
+          <div class="tabs">
+            <button class="tab on" data-tab="main" onclick="switchTab('main')">主信息</button>
+            <button class="tab" data-tab="detail" id="tab-btn-detail" onclick="switchTab('detail')">详细信息</button>
+          </div>
+          <div id="tab-main"></div>
+          <div id="tab-detail" style="display:none; padding:14px"></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="overlay" id="overlay">
+    <div class="modal">
+      <h3 id="modal-title">XML</h3>
+      <div class="body" id="modal-body"></div>
+      <div class="foot">
+        <button class="btn" onclick="closeModal()">关闭</button>
+        <button class="btn btn-primary" id="btn-dl" onclick="downloadXml()">下载 XML</button>
+      </div>
+    </div>
+  </div>
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const FI = { aeoiId: "AB12345", fiName: "Goldhorse Securities Ltd" };
+    const AH_TYPE_LABEL = {
+      CRS101: "Passive Non-Financial Entity with one or more controlling person that is a Reportable Person",
+      CRS102: "Reportable Person",
+      CRS103: "Passive NFE that is a Reportable Person"
+    };
+    const CP_TYPE_LABEL = {
+      CRS801: "CP of legal person - ownership",
+      CRS802: "CP of legal person - other means",
+      CRS803: "CP of legal person - senior managing official"
+    };
+
+    const RAW = [
+      {
+        id: "ind-100006",
+        year: "2025",
+        clientAccount: "100006.001",
+        portfolio: 37354060.80,
+        status: "Active",
+        periodFrom: "2025-01-01",
+        periodTo: "2025-12-31",
+        ccy: "HKD",
+        crs501: 0, crs502: 0, crs503: 0, crs504: 0,
+        clientId: "100006.001",
+        crsType: "Individual",
+        accHolderType: "",
+        entityType: "",
+        taxResidency: "CN",
+        tin: "330106197811060018",
+        birthDate: "1978-11-06",
+        fullName: "JIAN HAN",
+        orgName: "",
+        cor: "CN",
+        addressRaw: "中國\n北京市朝陽區\n北京香頌227棟1102",
+        controllingPersons: []
+      },
+      {
+        id: "ent-700029",
+        year: "2025",
+        clientAccount: "700029.001",
+        portfolio: 3054384.90,
+        status: "Active",
+        periodFrom: "2025-01-01",
+        periodTo: "2025-12-31",
+        ccy: "HKD",
+        crs501: 0, crs502: 0, crs503: 0, crs504: 0,
+        clientId: "700029.001",
+        crsType: "Entity",
+        accHolderType: "CRS101",
+        entityType: "G",
+        taxResidency: "VG",
+        tin: "",
+        birthDate: "",
+        fullName: "",
+        orgName: "Blossom South Limited",
+        cor: "VG",
+        addressRaw: "Room 2402, Unit 2, Building 4, Yard 9,\nFengxiu East Road, Haidian District,\nBeijing China",
+        controllingPersons: [
+          {
+            cpType: "CRS803",
+            taxResidency: "CN",
+            tin: "510102196511137478",
+            fullName: "Wangang Xu",
+            birthDate: "1965-11-13",
+            cor: "CN",
+            addressRaw: "Room 2402, Unit 2, Building 4, Yard 9,\nFengxiu East Road, Haidian District, Beijing\nChina"
+          },
+          {
+            cpType: "CRS803",
+            taxResidency: "CN",
+            tin: "510107199802202618",
+            fullName: "Junjie Xu",
+            birthDate: "1998-02-20",
+            cor: "CN",
+            addressRaw: "Room 2402, Unit 2, Building 4, Yard 9,\nFengxiu East Road, Haidian District, Beijing\nChina"
+          }
+        ]
+      },
+      {
+        id: "ent-700006",
+        year: "2025",
+        clientAccount: "700006.001",
+        portfolio: 0,
+        status: "Active",
+        periodFrom: "2025-01-01",
+        periodTo: "2025-12-31",
+        ccy: "HKD",
+        crs501: 0, crs502: 0, crs503: 0, crs504: 0,
+        clientId: "700006.001",
+        crsType: "Entity",
+        accHolderType: "CRS102",
+        entityType: "G",
+        taxResidency: "VG",
+        tin: "",
+        birthDate: "",
+        fullName: "",
+        orgName: "WIND SURFING INVESTMENT LIMITED",
+        cor: "VG",
+        addressRaw: "INTERSHORE CHAMBERS, ROAD TOWN,\nTORTOLA,\nBRITISH VIRGIN ISLANDS",
+        controllingPersons: []
+      },
+      {
+        id: "ent-700003",
+        year: "2025",
+        clientAccount: "700003.001",
+        portfolio: 488841452.09,
+        status: "Active",
+        periodFrom: "2025-01-01",
+        periodTo: "2025-12-31",
+        ccy: "HKD",
+        crs501: 0, crs502: 0, crs503: 0, crs504: 0,
+        clientId: "700003.001",
+        crsType: "Entity",
+        accHolderType: "CRS103",
+        entityType: "G",
+        taxResidency: "HK",
+        tin: "",
+        birthDate: "",
+        fullName: "",
+        orgName: "LOFTY TECH LIMITED",
+        cor: "HK",
+        addressRaw: "FLAT B, 19/F\n33 KA WAI MAN RD\nKENNEDY TOWN, HK",
+        controllingPersons: []
+      }
+    ];
+
+    let DATA = RAW.map(r => ({ ...r, mapped: deriveMapped(r) }));
+    let filtered = DATA.slice();
+    let currentId = null;
+    let detailMode = "view";
+    let lastXml = { name: "", body: "" };
+    let selected = new Set();
+
+    function countryName(code) {
+      if (!code) return "";
+      return (window.ISO_COUNTRIES && ISO_COUNTRIES[code.toUpperCase()]) || code;
+    }
+    function countryCodeFromName(name) {
+      if (!name) return "";
+      const n = name.trim().toLowerCase();
+      if (window.CODE_BY_NAME && CODE_BY_NAME[n]) return CODE_BY_NAME[n];
+      const aliases = { china: "CN", "hong kong": "HK", "virgin islands, british": "VG", "british virgin islands": "VG" };
+      return aliases[n] || "";
+    }
+    function titleFromTin(issuedByCode, tin) {
+      if ((issuedByCode || "").toUpperCase() !== "CN" || !tin) return "";
+      const d = parseInt(String(tin).replace(/\s/g, "").slice(-2, -1), 10);
+      if (Number.isNaN(d)) return "";
+      return d % 2 === 1 ? "Mr." : "Mrs.";
+    }
+    function splitName(full) {
+      const parts = String(full || "").trim().split(/\s+/).filter(Boolean);
+      if (!parts.length) return { first: "", middle: "", last: "" };
+      if (parts.length === 1) return { first: parts[0].toUpperCase(), middle: "", last: "" };
+      if (parts.length === 2) return { first: parts[0].toUpperCase(), middle: "", last: parts[1].toUpperCase() };
+      return { first: parts[0].toUpperCase(), middle: parts.slice(1, -1).join(" "), last: parts[parts.length - 1].toUpperCase() };
+    }
+    function fmtDMY(iso, sep) {
+      const m = String(iso || "").match(/(\d{4})-(\d{2})-(\d{2})/);
+      if (!m) return iso || "";
+      return m[3] + sep + m[2] + sep + m[1];
+    }
+    function n2(n) {
+      return Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    function money(ccy, n) {
+      return (ccy || "HKD") + " " + Number(n || 0).toFixed(2);
+    }
+    function esc(s) {
+      return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" }[c]));
+    }
+    function lines(addr) { return String(addr || "").split(/\r?\n/).map(x => x.trim()).filter(Boolean); }
+
+    function parseIndividualAddress(raw) {
+      const L = lines(raw);
+      const out = { street: "", district: "", city: "", country: "", countryCode: "", building: "", format: "Free" };
+      if (!L.length) return out;
+      const first = L[0];
+      if (/中国|中國|CHINA/i.test(first) && first.length <= 8) {
+        out.country = "China"; out.countryCode = "CN";
+      } else {
+        out.country = first; out.countryCode = countryCodeFromName(first);
+      }
+      if (L[1]) {
+        const cityMap = [
+          [/北京/, "BEIJING"], [/上海/, "SHANGHAI"], [/深圳/, "SHENZHEN"], [/广州|廣州/, "GUANGZHOU"],
+          [/杭州/, "HANGZHOU"], [/成都/, "CHENGDU"], [/武汉|武漢/, "WUHAN"], [/重庆|重慶/, "CHONGQING"],
+          [/贵阳|貴陽/, "GUIYANG"], [/太原/, "TAIYUAN"]
+        ];
+        for (const [re, en] of cityMap) { if (re.test(L[1])) { out.city = en; break; } }
+        const dm = L[1].match(/([\u4e00-\u9fff]{1,8}[区區])$/);
+        if (dm) out.district = dm[1];
+        else {
+          const dm2 = L[1].match(/([\u4e00-\u9fff]+[区區])/);
+          if (dm2) out.district = dm2[1];
+        }
+      }
+      if (L[2]) out.street = L[2];
+      else if (L[1] && !out.street) out.street = L[1];
+      out.format = out.city ? "Fixed" : "Free";
+      return out;
+    }
+
+    function parseEntityAddress(raw) {
+      const L = lines(raw);
+      const out = { building: "", street: "", district: "", city: "", country: "", countryCode: "", format: "Free" };
+      if (!L.length) return out;
+      out.building = L[0] || "";
+      if (L[1]) {
+        const dist = L[1].match(/([^,]+)\s+District/i);
+        if (dist) {
+          out.district = dist[1].trim().replace(/,$/, "");
+          out.street = L[1].replace(/,?\s*[^,]*District.*$/i, "").replace(/,$/, "").trim();
+        } else {
+          out.street = L[1];
+        }
+      }
+      const last = L[L.length - 1] || "";
+      const cityCountry = last.match(/^([A-Za-z\s]+?)\s+(China|Hong Kong|Singapore|Seychelles)$/i);
+      if (cityCountry) {
+        out.city = cityCountry[1].trim().toUpperCase();
+        out.country = countryName(countryCodeFromName(cityCountry[2])) || (cityCountry[2][0].toUpperCase() + cityCountry[2].slice(1).toLowerCase());
+        out.countryCode = countryCodeFromName(cityCountry[2]) || countryCodeFromName(out.country);
+      } else if (/china|hong kong|british virgin|singapore/i.test(last) && !/[0-9]/.test(last)) {
+        if (/china/i.test(last) && /beijing/i.test(last)) { out.city = "BEIJING"; out.country = "China"; out.countryCode = "CN"; }
+        else if (/british virgin/i.test(last)) { out.country = "Virgin Islands, British"; out.countryCode = "VG"; }
+        else if (/hong kong|, hk$/i.test(last)) { out.country = "Hong Kong"; out.countryCode = "HK"; }
+        else if (/china/i.test(last)) { out.country = "China"; out.countryCode = "CN"; }
+      } else if (L.length >= 3) {
+        const mid = last.replace(/,?\s*(China|Hong Kong|HK)$/i, "").trim();
+        if (/beijing/i.test(mid)) out.city = "BEIJING";
+        else if (/hong kong|kennedy town/i.test(last)) { out.city = ""; out.country = "Hong Kong"; out.countryCode = "HK"; }
+        if (/china/i.test(last)) { out.country = "China"; out.countryCode = "CN"; }
+        if (/hong kong|, hk$/i.test(last)) { out.country = "Hong Kong"; out.countryCode = "HK"; }
+      }
+      out.format = out.city ? "Fixed" : "Free";
+      return out;
+    }
+
+    function parseCPAddress(raw) {
+      const L = lines(raw);
+      const joined = L.join(", ");
+      const out = parseEntityAddress(raw);
+      if (!out.city && /beijing/i.test(joined)) out.city = "BEIJING";
+      if (!out.country && /china/i.test(joined)) { out.country = "China"; out.countryCode = "CN"; }
+      if (/haidian/i.test(joined) && !out.district) out.district = "Haidian";
+      if (/fengxiu/i.test(joined) && !out.street) out.street = "Fengxiu East Road";
+      out.format = out.city ? "Fixed" : "Free";
+      return out;
+    }
+
+    function deriveMapped(r) {
+      const base = {
+        docType: "Submit new record",
+        accountNumber: r.clientAccount,
+        accountNumberType: "Other Securities Information Number (OSIN)",
+        accountStatus: r.status,
+        undocumented: "No",
+        docRefId: "",
+        accountType: "Custodial Account",
+        accountBalance: money(r.ccy, r.portfolio),
+        dividends: money(r.ccy, r.crs501),
+        interest: money(r.ccy, r.crs502),
+        proceeds: money(r.ccy, r.crs503),
+        otherIncome: money(r.ccy, r.crs504),
+        remarks: ""
+      };
+      if (r.crsType === "Individual") {
+        const nm = splitName(r.fullName);
+        const addr = parseIndividualAddress(r.addressRaw);
+        if (r.clientAccount === "100006.001") {
+          addr.street = "北京香頌227棟1102";
+          addr.district = "朝陽區";
+          addr.city = "BEIJING";
+          addr.country = "China";
+          addr.countryCode = "CN";
+          addr.format = "Fixed";
+        }
+        return {
+          ...base,
+          residenceCountry: countryName(r.cor),
+          residenceCountryCode: r.cor,
+          tin: r.tin,
+          issuedBy: countryName(r.taxResidency),
+          issuedByCode: r.taxResidency,
+          nameType: "Individual",
+          title: titleFromTin(r.taxResidency, r.tin),
+          precedingTitle: "", firstName: nm.first, middleName: nm.middle, namePrefix: "",
+          lastName: nm.last, generation: "", suffix: "", generalSuffix: "",
+          legalAddressType: "Residential",
+          street: addr.street, suite: "", floor: "", building: "",
+          district: addr.district, city: addr.city, countrySubentity: "",
+          country: addr.country, countryCode: addr.countryCode || r.cor,
+          postalCode: "", poBox: "", remarks: "",
+          addressFormat: addr.format,
+          birthDate: fmtDMY(r.birthDate, "/"),
+          birthDateIso: r.birthDate,
+          birthCity: "CHINA",
+          birthCitySub: "",
+          birthCountry: countryName(r.cor) === "Hong Kong" ? "Hong Kong" : (countryName(r.cor) || "China"),
+          birthCountryCode: r.cor,
+          formerCountry: "",
+          cps: []
+        };
+      }
+      const addr = parseEntityAddress(r.addressRaw);
+      if (r.clientAccount === "700029.001") {
+        addr.building = "Room 2402, Unit 2, Building 4, Yard 9,";
+        addr.street = "Fengxiu East Road";
+        addr.district = "Haidian";
+        addr.city = "BEIJING";
+        addr.country = "China";
+        addr.countryCode = "CN";
+        addr.format = "Fixed";
+      }
+      const showCP = r.accHolderType === "CRS101" && r.controllingPersons && r.controllingPersons.length;
+      const cps = showCP ? r.controllingPersons.map((cp, i) => {
+        const nm = splitName(cp.fullName);
+        let a = parseCPAddress(cp.addressRaw);
+        if (r.clientAccount === "700029.001") {
+          a = {
+            building: "Room 2402, Unit 2, Building 4, Yard 9,",
+            street: "Fengxiu East Road",
+            district: "Haidian",
+            city: "BEIJING",
+            country: "China",
+            countryCode: "CN",
+            format: "Fixed"
+          };
+        }
+        return {
+          seq: i + 1,
+          cpTypeCode: "CRS801",
+          cpTypeLabel: CP_TYPE_LABEL.CRS801,
+          residenceCountry: countryName(cp.taxResidency),
+          residenceCountryCode: cp.taxResidency,
+          tin: cp.tin,
+          issuedBy: countryName(cp.taxResidency),
+          issuedByCode: cp.taxResidency,
+          nameType: "Individual",
+          title: titleFromTin(cp.taxResidency, cp.tin),
+          precedingTitle: "", firstName: nm.first, middleName: nm.middle, namePrefix: "",
+          lastName: nm.last, generation: "", suffix: "", generalSuffix: "",
+          legalAddressType: "Residential",
+          suite: "", floor: "", building: a.building, street: a.street, district: a.district,
+          city: a.city, countrySubentity: "", country: a.country, countryCode: a.countryCode || cp.cor,
+          postalCode: "", poBox: "", remarks: "",
+          addressFormat: a.format,
+          birthDate: fmtDMY(cp.birthDate, "/"),
+          birthDateIso: cp.birthDate,
+          birthCity: "", birthCitySub: "", birthCountry: countryName(cp.cor), formerCountry: ""
+        };
+      }) : [];
+      return {
+        ...base,
+        entityHolderType: r.accHolderType,
+        entityHolderTypeLabel: AH_TYPE_LABEL[r.accHolderType] || "",
+        residenceCountry: countryName(r.cor),
+        residenceCountryCode: r.cor,
+        entityIN: "",
+        inType: "Certificate of Incorporation",
+        inIssuedBy: countryName(r.taxResidency),
+        inIssuedByCode: r.taxResidency,
+        orgName: r.orgName,
+        nameType: "Legal Name",
+        legalAddressType: "Business",
+        suite: "", floor: "", building: addr.building, street: addr.street, district: addr.district,
+        city: addr.city, countrySubentity: "",
+        country: addr.country, countryCode: addr.countryCode,
+        postalCode: "", poBox: "", remarks: "",
+        addressFormat: addr.format,
+        tin: r.tin,
+        cps
+      };
+    }
+
+    function search() {
+      const y = document.getElementById("q-year").value;
+      const acct = document.getElementById("q-acct").value.trim().toLowerCase();
+      const crs = document.getElementById("q-crs").value;
+      const aht = document.getElementById("q-aht").value;
+      filtered = DATA.filter(r => {
+        if (y && r.year !== y) return false;
+        if (acct && !r.clientAccount.toLowerCase().includes(acct)) return false;
+        if (crs && r.crsType !== crs) return false;
+        if (aht && r.accHolderType !== aht) return false;
+        return true;
+      });
+      renderList();
+    }
+    function resetFilter() {
+      document.getElementById("q-year").value = "2025";
+      document.getElementById("q-acct").value = "";
+      document.getElementById("q-crs").value = "";
+      document.getElementById("q-aht").value = "";
+      selected.clear();
+      search();
+    }
+    function toggleAll(on) {
+      filtered.forEach(r => on ? selected.add(r.id) : selected.delete(r.id));
+      renderList();
+    }
+    function toggleOne(id, on) {
+      on ? selected.add(id) : selected.delete(id);
+    }
+
+    function renderList() {
+      const tb = document.getElementById("tbody");
+      document.getElementById("list-empty").style.display = filtered.length ? "none" : "block";
+      tb.innerHTML = filtered.map(r => `
+        <tr class="${selected.has(r.id) ? "selected" : ""}">
+          <td><input type="checkbox" ${selected.has(r.id) ? "checked" : ""} onclick="event.stopPropagation(); toggleOne('${r.id}', this.checked)" /></td>
+          <td class="mono">${esc(r.clientAccount)}</td>
+          <td><span class="tag ${r.crsType === "Individual" ? "tag-ind" : "tag-ent"}">${esc(r.crsType)}</span></td>
+          <td>${esc(r.accHolderType || "—")}</td>
+          <td>${esc(r.crsType === "Individual" ? r.fullName : r.orgName)}</td>
+          <td>${esc(r.taxResidency)}</td>
+          <td><span class="tag tag-ok">${esc(r.status)}</span></td>
+          <td>${esc(r.ccy + " " + n2(r.portfolio))}</td>
+          <td>${esc(r.year)}</td>
+          <td><div class="ops">
+            <button type="button" class="icon-btn view" title="查看" aria-label="查看" onclick="event.stopPropagation(); openDetail('${r.id}', 'view')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+            </button>
+            <button type="button" class="icon-btn" title="编辑" aria-label="编辑" onclick="event.stopPropagation(); openDetail('${r.id}', 'edit')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 20h9"/>
+                <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4 11.5-11.5z"/>
+              </svg>
+            </button>
+          </div></td>
+        </tr>`).join("");
+      tb.querySelectorAll("tr").forEach((tr, i) => {
+        tr.addEventListener("click", () => openDetail(filtered[i].id, "view"));
+      });
+    }
+
+    function rec(id) { return DATA.find(x => x.id === id); }
+
+    function backList() {
+      document.getElementById("view-detail").style.display = "none";
+      document.getElementById("view-list").style.display = "block";
+      currentId = null;
+      renderList();
+    }
+    function switchTab(name) {
+      document.querySelectorAll(".tab").forEach(t => t.classList.toggle("on", t.dataset.tab === name));
+      document.getElementById("tab-main").style.display = name === "main" ? "block" : "none";
+      document.getElementById("tab-detail").style.display = name === "detail" ? "block" : "none";
+    }
+
+    function kv(k, v, extra) {
+      return `<div class="kv"><span class="k">${k} : </span><span class="v ${extra || ""}">${v == null || v === "" ? "" : v}</span></div>`;
+    }
+
+    function openDetail(id, mode) {
+      currentId = id;
+      detailMode = mode === "edit" ? "edit" : "view";
+      const r = rec(id);
+      document.getElementById("view-list").style.display = "none";
+      document.getElementById("view-detail").style.display = "block";
+      document.getElementById("detail-title").textContent = r.clientAccount + " · " + r.crsType;
+      document.getElementById("detail-sub").textContent = "Return Year " + r.year + (detailMode === "view" ? " · 查看" : " · 编辑");
+      document.getElementById("btn-save").style.display = detailMode === "edit" ? "" : "none";
+      document.getElementById("tab-btn-detail").textContent = detailMode === "edit" ? "详细信息（可编辑）" : "详细信息";
+      document.getElementById("detail-hint").textContent = detailMode === "edit"
+        ? "可修改详细信息中的映射字段后保存。主信息为源数据快照。有 City 时 Address Format 默认为 Fixed，否则为 Free。"
+        : "当前为查看模式，字段只读，不可编辑。请使用列表中的编辑图标进入编辑。";
+      switchTab("main");
+      renderMain(r);
+      renderDetailForm(r);
+    }
+
+    function applyFormMode() {
+      const root = document.getElementById("tab-detail");
+      const lock = detailMode !== "edit";
+      root.querySelectorAll("input, select, textarea").forEach(el => { el.disabled = lock; });
+    }
+
+    function renderMain(r) {
+      const addr = esc(r.addressRaw).replace(/\n/g, "<br>");
+      let html = `
+        <div class="sec-bar">Account Info</div>
+        <div class="sec-body">
+          <div class="kv-grid">
+            ${kv("Client Account", esc(r.clientAccount), "mono")}
+            ${kv("A/C Portfolio (" + esc(r.ccy) + ")", n2(r.portfolio))}
+            ${kv("Status", esc(r.status))}
+            ${kv("Period From", esc(r.periodFrom))}
+            ${kv("Period To", esc(r.periodTo))}
+            ${kv("CCY", esc(r.ccy))}
+            ${kv("Dividends (CRS501)", Number(r.crs501).toFixed(2))}
+            ${kv("Interest (CRS502)", Number(r.crs502).toFixed(2))}
+            ${kv("Gross Proceeds / Redemptions (CRS503)", Number(r.crs503).toFixed(2))}
+            ${kv("Other (CRS504)", Number(r.crs504).toFixed(2))}
+          </div>
+        </div>
+        <div class="sec-bar">Account Holders Info</div>
+        <div class="sec-body">
+          <div class="kv-grid">
+            ${kv("Client Id", esc(r.clientId), "mono")}
+            ${kv("CRS Type", esc(r.crsType))}
+            ${r.crsType === "Entity" ? kv("Entity Type", esc(r.entityType)) : ""}
+            ${r.crsType === "Entity" ? kv("Account Holder Type", esc(r.accHolderType)) : ""}
+            ${kv("Tax Residency", esc(r.taxResidency))}
+            ${kv("Tin", esc(r.tin))}
+            ${r.crsType === "Individual" ? kv("Birth Date", esc(r.birthDate)) : kv("Birth Date", "")}
+            ${r.crsType === "Individual" ? kv("First Middle Last Name", esc(r.fullName)) : kv("Organisation Name", esc(r.orgName))}
+            ${kv("Country of Residence", esc(r.cor))}
+            <div class="kv" style="grid-column:1/-1"><span class="k">Address : </span><span class="v addr-pre">${addr}</span></div>
+          </div>
+        </div>`;
+      if (r.crsType === "Entity" && r.accHolderType === "CRS101" && r.controllingPersons.length) {
+        html += `<div class="sec-bar">Controlling Persons Info</div>
+          <div class="sec-body" style="overflow:auto">
+            <table>
+              <thead><tr>
+                <th>Controlling Person Type</th><th>Tax Residency</th><th>Tin</th>
+                <th>First Middle Last Name</th><th>Birth Date</th><th>Country of Residence</th><th>Address</th>
+              </tr></thead>
+              <tbody>${r.controllingPersons.map(cp => `<tr>
+                <td>${esc(cp.cpType)}</td><td>${esc(cp.taxResidency)}</td><td class="mono">${esc(cp.tin)}</td>
+                <td>${esc(cp.fullName)}</td><td>${esc(cp.birthDate)}</td><td>${esc(cp.cor)}</td>
+                <td class="addr-cell">${esc(cp.addressRaw)}</td>
+              </tr>`).join("")}</tbody>
+            </table>
+          </div>`;
+      }
+      document.getElementById("tab-main").innerHTML = html;
+    }
+
+    function inp(name, value, placeholder) {
+      const ph = placeholder ? ` placeholder="${esc(placeholder)}"` : "";
+      return `<input data-f="${name}" value="${esc(value || "")}"${ph} />`;
+    }
+    function sel(name, value, options) {
+      const opts = options.map(o => {
+        const v = Array.isArray(o) ? o[0] : o;
+        const l = Array.isArray(o) ? o[1] : o;
+        return `<option value="${esc(v)}" ${v === value ? "selected" : ""}>${esc(l)}</option>`;
+      }).join("");
+      return `<select data-f="${name}">${opts}</select>`;
+    }
+    function row(label, control, hint) {
+      return `<div class="fg"><label>${label}</label>${control}${hint ? `<div class="hint">${hint}</div>` : ""}</div>`;
+    }
+    function pairRow(label, mainCtrl, extraLabel, extraCtrl, hint) {
+      return `<div class="fg fg-pair"><label>${label}</label><div class="pair-controls">${mainCtrl}<span class="pair-extra-label">${extraLabel}</span>${extraCtrl}</div>${hint ? `<div class="hint">${hint}</div>` : ""}</div>`;
+    }
+    function tripleRow(label, mainCtrl, l1, c1, l2, c2, hint) {
+      return `<div class="fg fg-triple"><label>${label}</label><div class="triple-controls">${mainCtrl}<span class="pair-extra-label">${l1}</span>${c1}<span class="pair-extra-label">${l2}</span>${c2}</div>${hint ? `<div class="hint">${hint}</div>` : ""}</div>`;
+    }
+    function nameBlock(p, m, titleHint) {
+      return row("Name Type", inp(p + "nameType", m.nameType))
+        + row("Preceding Title", inp(p + "precedingTitle", m.precedingTitle))
+        + row("Title", inp(p + "title", m.title), titleHint || "")
+        + row("First Name", inp(p + "firstName", m.firstName))
+        + row("Middle Name", inp(p + "middleName", m.middleName))
+        + row("Name Prefix", inp(p + "namePrefix", m.namePrefix))
+        + row("Last Name", inp(p + "lastName", m.lastName))
+        + row("Generation Identifier", inp(p + "generation", m.generation))
+        + row("Suffix", inp(p + "suffix", m.suffix))
+        + row("General Suffix", inp(p + "generalSuffix", m.generalSuffix));
+    }
+    function addressBlock(p, m, legalHint) {
+      return row("Address Format", sel(p + "addressFormat", m.addressFormat, ["Fixed", "Free"]), "有 City → Fixed，否则 Free")
+        + row("Legal Address Type", inp(p + "legalAddressType", m.legalAddressType), legalHint || "")
+        + row("Suite", inp(p + "suite", m.suite))
+        + row("Floor", inp(p + "floor", m.floor))
+        + row("Building", inp(p + "building", m.building))
+        + row("Street", inp(p + "street", m.street))
+        + row("District", inp(p + "district", m.district))
+        + row("City", inp(p + "city", m.city))
+        + row("Country Subentity", inp(p + "countrySubentity", m.countrySubentity))
+        + row("Country", inp(p + "country", m.country))
+        + row("Postal Code", inp(p + "postalCode", m.postalCode))
+        + row("PO Box", inp(p + "poBox", m.poBox))
+        + row("Remarks", inp(p + "remarks", m.remarks));
+    }
+    function birthBlock(p, m, cityHint, countryHint) {
+      return row("Date of Birth", inp(p + "birthDate", m.birthDate), "DD/MM/YYYY")
+        + `<div class="subhead">Place of Birth</div>`
+        + row("City", inp(p + "birthCity", m.birthCity), cityHint || "")
+        + row("City Subentity", inp(p + "birthCitySub", m.birthCitySub))
+        + row("Country", inp(p + "birthCountry", m.birthCountry), countryHint || "")
+        + row("Former Country Name", inp(p + "formerCountry", m.formerCountry));
+    }
+
+    function renderDetailForm(r) {
+      const m = r.mapped;
+      let html = "";
+      html += `<div class="box"><div class="sec-bar light">Account Details</div><div class="sec-body">
+        ${row("Account Number", inp("accountNumber", m.accountNumber))}
+        ${row("Account Number Type", inp("accountNumberType", m.accountNumberType), "固定 Other Securities Information Number (OSIN)")}
+        ${row("Account Status", inp("accountStatus", m.accountStatus))}
+        ${row("Undocumented Account", sel("undocumented", m.undocumented, ["No", "Yes"]), "固定 No")}
+      </div></div>`;
+
+      if (r.crsType === "Individual") {
+        html += `<div class="box"><div class="sec-bar light">Account Holder</div>
+          <div class="sec-bar mid">Individual Holder #1</div><div class="sec-body">
+          ${row("Document Reference ID", inp("docRefId", m.docRefId), "可空。生成 XML 时若为空，系统按 AEOIID-申报年-账号 自动写入；已填写则用填写值。")}
+          ${row("Residence Country", inp("residenceCountry", m.residenceCountry), "Country of Residence 全称 · isocrstypes_v1.1.xsd")}
+          ${pairRow("Tax Identification Number", inp("tin", m.tin), "Issued By", inp("issuedBy", m.issuedBy), "Issued By 取 Tax Residency 全称")}
+          <div class="nested">
+            <div class="sec-bar mid">Name #1</div><div class="sec-body">
+              ${nameBlock("", m, "Issued By=China 时 TIN 倒数第二位奇数 Mr. / 偶数 Mrs.")}
+            </div>
+          </div>
+          <div class="nested">
+            <div class="sec-bar mid">Address #1</div><div class="sec-body">
+              ${addressBlock("", m, "Individual 默认 Residential")}
+            </div>
+          </div>
+          <div class="nested">
+            <div class="sec-bar mid">Birth Information</div><div class="sec-body">
+              ${birthBlock("", m, "无则 CHINA", "开户国籍/地区，中国只写 China")}
+            </div>
+          </div>
+        </div></div>`;
+      } else {
+        html += `<div class="box"><div class="sec-bar light">Account Holder</div>
+          <div class="sec-bar mid">Entity Holder #1</div><div class="sec-body">
+          ${row("Document Reference ID", inp("docRefId", m.docRefId), "可空。生成 XML 时若为空，系统按 AEOIID-申报年-账号 自动写入；已填写则用填写值。")}
+          ${row("Entity Holder Type", sel("entityHolderType", m.entityHolderType, [
+            ["CRS101", AH_TYPE_LABEL.CRS101],
+            ["CRS102", AH_TYPE_LABEL.CRS102],
+            ["CRS103", AH_TYPE_LABEL.CRS103]
+          ]))}
+          ${row("Residence Country", inp("residenceCountry", m.residenceCountry), "Country of Residence 全称，如 VG → Virgin Islands, British")}
+          ${tripleRow("Entity Identification Number", inp("entityIN", m.entityIN), "Type", inp("inType", m.inType), "Issued By", inp("inIssuedBy", m.inIssuedBy), "CI Number 先为空；Type 默认 Certificate of Incorporation")}
+          ${pairRow("Name", inp("orgName", m.orgName), "Name Type", inp("nameType", m.nameType), "Name Type 默认 Legal Name")}
+          <div class="nested">
+            <div class="sec-bar mid">Address #1</div><div class="sec-body">
+              ${addressBlock("", m, "Entity 默认 Business")}
+            </div>
+          </div>
+        </div></div>`;
+
+        if (m.cps && m.cps.length) {
+          html += `<div class="module-title">Controlling Person</div>`;
+          m.cps.forEach((cp, i) => {
+            const p = "cps." + i + ".";
+            html += `<div class="box"><div class="sec-bar mid">Controlling Person #${i + 1}</div><div class="sec-body">
+              ${row("Controlling Person Type", sel(p + "cpTypeCode", cp.cpTypeCode, [
+                ["CRS801", CP_TYPE_LABEL.CRS801],
+                ["CRS802", CP_TYPE_LABEL.CRS802],
+                ["CRS803", CP_TYPE_LABEL.CRS803]
+              ]), "默认为 CP of legal person - ownership")}
+              ${row("Residence Country", inp(p + "residenceCountry", cp.residenceCountry))}
+              ${pairRow("Tax Identification Number", inp(p + "tin", cp.tin), "Issued By", inp(p + "issuedBy", cp.issuedBy))}
+              <div class="nested"><div class="sec-bar mid">Name #1</div><div class="sec-body">
+                ${nameBlock(p, cp, "Issued By=China 时 TIN 倒数第二位奇数 Mr. / 偶数 Mrs.")}
+              </div></div>
+              <div class="nested"><div class="sec-bar mid">Address #1</div><div class="sec-body">
+                ${addressBlock(p, cp, "Individual 默认 Residential")}
+              </div></div>
+              <div class="nested"><div class="sec-bar mid">Birth Information</div><div class="sec-body">
+                ${birthBlock(p, cp, "", "")}
+              </div></div>
+            </div></div>`;
+          });
+        } else if (r.crsType === "Entity" && (r.accHolderType === "CRS102" || r.accHolderType === "CRS103")) {
+          html += `<div class="hint-bar">Account Holder Type 为 ${esc(r.accHolderType)}：无 Controlling Persons Info，详情不展示控制人。</div>`;
+        }
+      }
+
+      html += `<div class="box"><div class="sec-bar light">Account Balance and Payments</div><div class="sec-body">
+        ${row("Account Type", inp("accountType", m.accountType), "默认 Custodial Account")}
+        ${row("Account Balance", inp("accountBalance", m.accountBalance), "币种与金额之间空一格，金额无千分位")}
+        <div class="nested"><div class="sec-bar mid">Gross amount paid or credited to the account during the year</div>
+          <div class="sec-body">
+            ${row("Dividends", inp("dividends", m.dividends))}
+            ${row("Interest", inp("interest", m.interest))}
+            ${r.crsType === "Entity" ? row("Proceeds from the Sale / Redemption of Financial Assets", inp("proceeds", m.proceeds)) : ""}
+            ${r.crsType === "Entity" ? row("Other Income", inp("otherIncome", m.otherIncome)) : ""}
+          </div>
+        </div>
+      </div></div>`;
+
+      document.getElementById("tab-detail").innerHTML = html;
+      applyFormMode();
+    }
+
+    function collectForm() {
+      const root = document.getElementById("tab-detail");
+      const r = rec(currentId);
+      const m = r.mapped;
+      root.querySelectorAll("[data-f]").forEach(el => {
+        const path = el.getAttribute("data-f");
+        const val = el.value;
+        if (path.startsWith("cps.")) {
+          const [, idx, key] = path.split(".");
+          if (m.cps[idx]) {
+            m.cps[idx][key] = val;
+            if (key === "cpTypeCode") m.cps[idx].cpTypeLabel = CP_TYPE_LABEL[val] || val;
+            if (key === "firstName" || key === "lastName") m.cps[idx][key] = String(val || "").toUpperCase();
+          }
+        } else {
+          m[path] = val;
+          if (path === "entityHolderType") m.entityHolderTypeLabel = AH_TYPE_LABEL[val] || "";
+          if (path === "firstName" || path === "lastName") m[path] = String(val || "").toUpperCase();
+        }
+      });
+    }
+
+    function saveDetail() {
+      if (detailMode !== "edit") return;
+      collectForm();
+      const r = rec(currentId);
+      renderMain(r);
+      renderDetailForm(r);
+      toast("已保存，可用于生成 XML");
+    }
+
+    function pad2(n) { return String(n).padStart(2, "0"); }
+    function tsStamp(d) {
+      return d.getFullYear() + pad2(d.getMonth() + 1) + pad2(d.getDate()) + pad2(d.getHours()) + pad2(d.getMinutes()) + pad2(d.getSeconds());
+    }
+    function isoTs(d) {
+      const off = -d.getTimezoneOffset();
+      const sign = off >= 0 ? "+" : "-";
+      const hh = pad2(Math.floor(Math.abs(off) / 60));
+      const mm = pad2(Math.abs(off) % 60);
+      return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}${sign}${hh}:${mm}`;
+    }
+    function parseMoney(s) {
+      const m = String(s || "").trim().match(/^([A-Z]{3})\s+(.+)$/);
+      if (!m) return { ccy: "HKD", amt: "0.00" };
+      return { ccy: m[1], amt: m[2].replace(/,/g, "") };
+    }
+    function legalTypeCode(label) {
+      const map = { Residential: "OECD302", Business: "OECD303", "Residential or Business": "OECD301", "Registered Office": "OECD304", Unspecified: "OECD305" };
+      return map[label] || "OECD302";
+    }
+    function nameTypeCode(label) {
+      if (/legal/i.test(label)) return "OECD207";
+      return "OECD202";
+    }
+    function countryCodeOf(nameOrCode) {
+      if (!nameOrCode) return "";
+      const u = nameOrCode.toUpperCase();
+      if (u.length === 2 && ISO_COUNTRIES[u]) return u;
+      return countryCodeFromName(nameOrCode) || "";
+    }
+
+    function xmlAddress(m, indent) {
+      const sp = " ".repeat(indent);
+      const cc = countryCodeOf(m.countryCode || m.country);
+      let x = `${sp}<Address legalAddressType="${legalTypeCode(m.legalAddressType)}">\n`;
+      x += `${sp}  <CountryCode>${esc(cc)}</CountryCode>\n`;
+      if (m.addressFormat === "Free" && !m.city) {
+        const free = [m.building, m.street, [m.district, m.city].filter(Boolean).join(" "), m.country].filter(Boolean);
+        x += `${sp}  <AddressFree>\n`;
+        (free.length ? free : [""]).slice(0, 5).forEach(line => { x += `${sp}    <Line>${esc(line)}</Line>\n`; });
+        x += `${sp}  </AddressFree>\n`;
+      } else {
+        x += `${sp}  <AddressFix>\n`;
+        if (m.street) x += `${sp}    <Street>${esc(m.street)}</Street>\n`;
+        if (m.building) x += `${sp}    <BuildingIdentifier>${esc(m.building)}</BuildingIdentifier>\n`;
+        if (m.suite) x += `${sp}    <SuiteIdentifier>${esc(m.suite)}</SuiteIdentifier>\n`;
+        if (m.floor) x += `${sp}    <FloorIdentifier>${esc(m.floor)}</FloorIdentifier>\n`;
+        if (m.district) x += `${sp}    <DistrictName>${esc(m.district)}</DistrictName>\n`;
+        x += `${sp}    <City>${esc(m.city || "")}</City>\n`;
+        if (m.countrySubentity) x += `${sp}    <CountrySubentity>${esc(m.countrySubentity)}</CountrySubentity>\n`;
+        if (m.postalCode) x += `${sp}    <PostCode>${esc(m.postalCode)}</PostCode>\n`;
+        if (m.poBox) x += `${sp}    <POB>${esc(m.poBox)}</POB>\n`;
+        x += `${sp}  </AddressFix>\n`;
+      }
+      x += `${sp}</Address>\n`;
+      return x;
+    }
+
+    function xmlPerson(m, indent, isOrg) {
+      const sp = " ".repeat(indent);
+      let x = "";
+      const res = countryCodeOf(m.residenceCountryCode || m.residenceCountry);
+      x += `${sp}<ResCountryCode>${esc(res)}</ResCountryCode>\n`;
+      if (!isOrg && m.tin) {
+        const ib = countryCodeOf(m.issuedByCode || m.issuedBy);
+        x += `${sp}<TIN${ib ? ` issuedBy="${esc(ib)}"` : ""}>${esc(m.tin)}</TIN>\n`;
+      }
+      if (isOrg && m.entityIN) {
+        const ib = countryCodeOf(m.inIssuedByCode || m.inIssuedBy);
+        x += `${sp}<IN${ib ? ` issuedBy="${esc(ib)}"` : ""}${m.inType ? ` INType="${esc(m.inType)}"` : ""}>${esc(m.entityIN)}</IN>\n`;
+      }
+      if (isOrg) {
+        x += `${sp}<Name nameType="${nameTypeCode(m.nameType)}">${esc(m.orgName)}</Name>\n`;
+      } else {
+        x += `${sp}<Name nameType="${nameTypeCode(m.nameType)}">\n`;
+        if (m.precedingTitle) x += `${sp}  <PrecedingTitle>${esc(m.precedingTitle)}</PrecedingTitle>\n`;
+        if (m.title) x += `${sp}  <Title>${esc(m.title)}</Title>\n`;
+        x += `${sp}  <FirstName>${esc(m.firstName)}</FirstName>\n`;
+        if (m.middleName) x += `${sp}  <MiddleName>${esc(m.middleName)}</MiddleName>\n`;
+        if (m.namePrefix) x += `${sp}  <NamePrefix>${esc(m.namePrefix)}</NamePrefix>\n`;
+        x += `${sp}  <LastName>${esc(m.lastName)}</LastName>\n`;
+        if (m.generation) x += `${sp}  <GenerationIdentifier>${esc(m.generation)}</GenerationIdentifier>\n`;
+        if (m.suffix) x += `${sp}  <Suffix>${esc(m.suffix)}</Suffix>\n`;
+        if (m.generalSuffix) x += `${sp}  <GeneralSuffix>${esc(m.generalSuffix)}</GeneralSuffix>\n`;
+        x += `${sp}</Name>\n`;
+      }
+      x += xmlAddress(m, indent);
+      if (!isOrg && (m.birthDateIso || m.birthDate)) {
+        const iso = m.birthDateIso || (function () {
+          const p = String(m.birthDate).match(/(\d{2})[/-](\d{2})[/-](\d{4})/);
+          return p ? `${p[3]}-${p[2]}-${p[1]}` : "";
+        })();
+        x += `${sp}<BirthInfo>\n`;
+        if (iso) x += `${sp}  <BirthDate>${esc(iso)}</BirthDate>\n`;
+        if (m.birthCity) x += `${sp}  <City>${esc(m.birthCity)}</City>\n`;
+        if (m.birthCitySub) x += `${sp}  <CitySubentity>${esc(m.birthCitySub)}</CitySubentity>\n`;
+        const bcc = countryCodeOf(m.birthCountryCode || m.birthCountry);
+        if (bcc) {
+          x += `${sp}  <CountryInfo>\n${sp}    <CountryCode>${esc(bcc)}</CountryCode>\n${sp}  </CountryInfo>\n`;
+        }
+        x += `${sp}</BirthInfo>\n`;
+      }
+      return x;
+    }
+
+    function xmlAccountReport(r, opts) {
+      const m = r.mapped;
+      const docType = opts.docTypeIndic;
+      const docRef = m.docRefId || (FI.aeoiId + "-" + r.year + "-" + r.clientAccount);
+      let x = `      <AccountReport>\n`;
+      x += `        <DocSpec>\n`;
+      x += `          <DocTypeIndic>${docType}</DocTypeIndic>\n`;
+      x += `          <DocRefId>${esc(docRef)}</DocRefId>\n`;
+      if (opts.messageType === "CRS702") {
+        x += `          <CorrFileSerialNumber>${esc(opts.corrFileSn)}</CorrFileSerialNumber>\n`;
+        x += `          <CorrDocRefId>${esc(opts.corrDocRefId || docRef)}</CorrDocRefId>\n`;
+        x += `          <CorrAccountNumber>${esc(r.clientAccount)}</CorrAccountNumber>\n`;
+      }
+      x += `        </DocSpec>\n`;
+      const closed = /closed/i.test(m.accountStatus);
+      const dormant = /dormant/i.test(m.accountStatus);
+      x += `        <AccountNumber AcctNumberType="OECD604" UndocumentedAccount="${m.undocumented === "Yes" ? "true" : "false"}"${closed ? ' ClosedAccount="true"' : ""}${dormant ? ' DormantAccount="true"' : ""}>${esc(r.clientAccount)}</AccountNumber>\n`;
+      x += `        <AccountHolder>\n`;
+      if (r.crsType === "Individual") {
+        x += `          <Individual>\n${xmlPerson(m, 12, false)}          </Individual>\n`;
+      } else {
+        x += `          <Organisation>\n${xmlPerson(m, 12, true)}          </Organisation>\n`;
+        x += `          <AcctHolderType>${esc(m.entityHolderType || r.accHolderType)}</AcctHolderType>\n`;
+      }
+      x += `        </AccountHolder>\n`;
+      if (r.crsType === "Entity" && m.cps && m.cps.length && (m.entityHolderType || r.accHolderType) === "CRS101") {
+        m.cps.forEach(cp => {
+          x += `        <ControllingPerson>\n`;
+          x += `          <Individual>\n${xmlPerson(cp, 12, false)}          </Individual>\n`;
+          x += `          <CtrlgPersonType>${esc(cp.cpTypeCode || "CRS801")}</CtrlgPersonType>\n`;
+          x += `        </ControllingPerson>\n`;
+        });
+      }
+      const bal = parseMoney(m.accountBalance);
+      x += `        <AccountBalance currCode="${esc(bal.ccy)}">${esc(bal.amt)}</AccountBalance>\n`;
+      const pays = [
+        ["CRS501", m.dividends],
+        ["CRS502", m.interest]
+      ];
+      if (r.crsType === "Entity") {
+        pays.push(["CRS503", m.proceeds], ["CRS504", m.otherIncome]);
+      }
+      pays.forEach(([t, v]) => {
+        const p = parseMoney(v);
+        x += `        <Payment>\n          <Type>${t}</Type>\n          <PaymentAmnt currCode="${esc(p.ccy)}">${esc(p.amt)}</PaymentAmnt>\n        </Payment>\n`;
+      });
+      x += `      </AccountReport>\n`;
+      return x;
+    }
+
+    function buildXml(records, messageType, extra) {
+      const now = new Date();
+      const year = (records[0] && records[0].year) || document.getElementById("q-year").value || "2025";
+      const seq = "00";
+      const ref = year + FI.aeoiId + tsStamp(now) + seq;
+      extra = extra || {};
+      let body = `<?xml version="1.0" encoding="UTF-8"?>\n`;
+      body += `<AEOI_Report version="2.0" xmlns="http://www.ird.gov.hk/AEOI/crs/v2" xmlns:cfc="http://www.ird.gov.hk/AEOI/aeoitypes/v2" xmlns:iso="urn:oecd:ties:isocrstypes:v1">\n`;
+      body += `  <MessageSpec>\n`;
+      body += `    <AeoiId>${esc(FI.aeoiId)}</AeoiId>\n`;
+      body += `    <FIName>${esc(FI.fiName)}</FIName>\n`;
+      body += `    <MessageRefId>${esc(ref)}</MessageRefId>\n`;
+      body += `    <MessageTypeIndic>${messageType}</MessageTypeIndic>\n`;
+      body += `    <ReturnYear>${esc(year)}</ReturnYear>\n`;
+      body += `    <Timestamp>${isoTs(now)}</Timestamp>\n`;
+      body += `  </MessageSpec>\n`;
+      body += `  <CrsBody>\n    <ReportingGroup>\n`;
+      records.forEach(r => { body += xmlAccountReport(r, { messageType, ...extra }); });
+      body += `    </ReportingGroup>\n  </CrsBody>\n</AEOI_Report>\n`;
+      return { name: ref + ".xml", body };
+    }
+
+    function showXml(title, pack) {
+      lastXml = pack;
+      document.getElementById("modal-title").textContent = title;
+      document.getElementById("modal-body").innerHTML = `<pre class="xml">${esc(pack.body)}</pre>`;
+      document.getElementById("overlay").classList.add("show");
+    }
+    function closeModal() { document.getElementById("overlay").classList.remove("show"); }
+    function downloadXml() {
+      const blob = new Blob([lastXml.body], { type: "application/xml;charset=utf-8" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = lastXml.name;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      toast("已下载 " + lastXml.name);
+    }
+
+    function openCrs701() {
+      const year = document.getElementById("q-year").value;
+      const recs = DATA.filter(r => r.year === year);
+      if (!recs.length) return toast("该申报年份没有数据");
+      const pack = buildXml(recs, "CRS701", { docTypeIndic: "OECD1" });
+      showXml("CRS701 新报 XML · Return Year " + year + " · " + recs.length + " 条", pack);
+    }
+
+    function openCrs702(singleId) {
+      const ids = singleId ? [singleId] : [...selected];
+      if (!ids.length) return toast("请先勾选需要更正/删除的记录");
+      const recs = ids.map(rec).filter(Boolean);
+      document.getElementById("modal-title").textContent = "生成 CRS702 更正/删除 XML";
+      document.getElementById("modal-body").innerHTML = `
+        <div class="field" style="margin-bottom:10px"><label>已选账户</label>
+          <div class="muted">${recs.map(r => r.clientAccount).join("、")}</div></div>
+        <div class="field" style="margin-bottom:10px"><label>DocTypeIndic</label>
+          <select id="f-doctype">
+            <option value="OECD2">OECD2 更正 Corrected Data</option>
+            <option value="OECD3">OECD3 删除 Deletion of Data</option>
+          </select></div>
+        <div class="field" style="margin-bottom:10px"><label>CorrFileSerialNumber（门户回执 8 位文件序号）</label>
+          <input id="f-sn" maxlength="8" placeholder="例如 00000012" /></div>
+        <div class="field"><label>CorrDocRefId（可空，默认用原 DocRefId）</label>
+          <input id="f-corr" placeholder="可选" /></div>
+        <div class="toolbar" style="padding-left:0"><button class="btn btn-primary" type="button" id="btn-mk702">生成 XML</button></div>
+        <div id="crs702-preview"></div>`;
+      document.getElementById("overlay").classList.add("show");
+      document.getElementById("btn-mk702").onclick = () => {
+        const sn = document.getElementById("f-sn").value.trim();
+        if (!/^\d{8}$/.test(sn)) return toast("CorrFileSerialNumber 须为 8 位数字");
+        const pack = buildXml(recs, "CRS702", {
+          docTypeIndic: document.getElementById("f-doctype").value,
+          corrFileSn: sn,
+          corrDocRefId: document.getElementById("f-corr").value.trim()
+        });
+        lastXml = pack;
+        document.getElementById("crs702-preview").innerHTML = `<pre class="xml">${esc(pack.body)}</pre>`;
+      };
+    }
+
+    function toast(msg) {
+      const t = document.getElementById("toast");
+      t.textContent = msg; t.style.display = "block";
+      setTimeout(() => t.style.display = "none", 2200);
+    }
+
+    search();
+  </script>
+</body>
+</html>
