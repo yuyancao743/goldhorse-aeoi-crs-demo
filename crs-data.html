@@ -258,7 +258,7 @@
           <div class="filter">
             <div class="field">
               <label>申报年份 Reporting Year</label>
-              <select id="q-year"><option value="2025">2025</option><option value="2024">2024</option></select>
+              <select id="q-year"></select>
             </div>
             <div class="field">
               <label>交易账号 Account Number</label>
@@ -298,7 +298,6 @@
                 <th>Client Account</th>
                 <th>CRS Type</th>
                 <th>Account Holder Type</th>
-                <th>Name / Organisation</th>
                 <th>Tax Residency</th>
                 <th>Status</th>
                 <th>A/C Portfolio</th>
@@ -510,11 +509,42 @@
       if (!m) return iso || "";
       return m[3] + sep + m[2] + sep + m[1];
     }
+    function fmtAmt(n) {
+      const num = Number(n);
+      if (!Number.isFinite(num)) return "0";
+      const s = num.toFixed(2).replace(/\.?0+$/, "");
+      return s === "-0" ? "0" : s;
+    }
     function n2(n) {
-      return Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const raw = fmtAmt(n);
+      const neg = raw.charAt(0) === "-";
+      const body = neg ? raw.slice(1) : raw;
+      const [intPart, dec] = body.split(".");
+      const grouped = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+      return (neg ? "-" : "") + grouped + (dec != null ? "." + dec : "");
     }
     function money(ccy, n) {
-      return (ccy || "HKD") + " " + Number(n || 0).toFixed(2);
+      return (ccy || "HKD") + " " + fmtAmt(n);
+    }
+    function isAmtToken(s) {
+      return /^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/.test(String(s || "").trim());
+    }
+    function stripAmtZeros(s) {
+      const t = String(s || "").trim();
+      if (!t.includes(".")) return t;
+      return t.replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "");
+    }
+    function normalizeMoneyValue(val) {
+      const m = String(val || "").trim().match(/^([A-Za-z]{3})\s+(.+)$/);
+      if (!m) return { ok: false };
+      const amt = m[2].replace(/,/g, "").trim();
+      if (!isAmtToken(amt)) return { ok: false };
+      return { ok: true, value: m[1].toUpperCase() + " " + stripAmtZeros(amt) };
+    }
+    function moneyFieldKeys(r) {
+      return r && r.crsType === "Entity"
+        ? ["accountBalance", "dividends", "interest", "proceeds", "otherIncome"]
+        : ["accountBalance", "dividends", "interest"];
     }
     function esc(s) {
       return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" }[c]));
@@ -663,7 +693,7 @@
         addr.countryCode = "CN";
         addr.format = "Fixed";
       }
-      const showCP = r.accHolderType === "CRS101" && r.controllingPersons && r.controllingPersons.length;
+      const showCP = r.crsType === "Entity" && r.controllingPersons && r.controllingPersons.length;
       const cps = showCP ? r.controllingPersons.map((cp, i) => {
         const nm = splitName(cp.fullName);
         let a = parseCPAddress(cp.addressRaw);
@@ -738,8 +768,20 @@
       });
       renderList();
     }
+    function lastReturnYear() {
+      return String(new Date().getFullYear() - 1);
+    }
+    function initYearSelect() {
+      const def = lastReturnYear();
+      const years = [...new Set([def, String(Number(def) - 1), ...DATA.map(r => r.year)])]
+        .filter(Boolean)
+        .sort((a, b) => Number(b) - Number(a));
+      document.getElementById("q-year").innerHTML = years.map(y =>
+        `<option value="${esc(y)}"${y === def ? " selected" : ""}>${esc(y)}</option>`
+      ).join("");
+    }
     function resetFilter() {
-      document.getElementById("q-year").value = "2025";
+      document.getElementById("q-year").value = lastReturnYear();
       document.getElementById("q-acct").value = "";
       document.getElementById("q-crs").value = "";
       document.getElementById("q-aht").value = "";
@@ -763,7 +805,6 @@
           <td class="mono">${esc(r.clientAccount)}</td>
           <td><span class="tag ${r.crsType === "Individual" ? "tag-ind" : "tag-ent"}">${esc(r.crsType)}</span></td>
           <td>${esc(r.accHolderType || "—")}</td>
-          <td>${esc(r.crsType === "Individual" ? r.fullName : r.orgName)}</td>
           <td>${esc(r.taxResidency)}</td>
           <td><span class="tag tag-ok">${esc(r.status)}</span></td>
           <td>${esc(r.ccy + " " + n2(r.portfolio))}</td>
@@ -842,10 +883,10 @@
             ${kv("Period From", esc(r.periodFrom))}
             ${kv("Period To", esc(r.periodTo))}
             ${kv("CCY", esc(r.ccy))}
-            ${kv("Dividends (CRS501)", Number(r.crs501).toFixed(2))}
-            ${kv("Interest (CRS502)", Number(r.crs502).toFixed(2))}
-            ${kv("Gross Proceeds / Redemptions (CRS503)", Number(r.crs503).toFixed(2))}
-            ${kv("Other (CRS504)", Number(r.crs504).toFixed(2))}
+            ${kv("Dividends (CRS501)", fmtAmt(r.crs501))}
+            ${kv("Interest (CRS502)", fmtAmt(r.crs502))}
+            ${kv("Gross Proceeds / Redemptions (CRS503)", fmtAmt(r.crs503))}
+            ${kv("Other (CRS504)", fmtAmt(r.crs504))}
           </div>
         </div>
         <div class="sec-bar">Account Holders Info</div>
@@ -863,7 +904,7 @@
             <div class="kv" style="grid-column:1/-1"><span class="k">Address : </span><span class="v addr-pre">${addr}</span></div>
           </div>
         </div>`;
-      if (r.crsType === "Entity" && r.accHolderType === "CRS101" && r.controllingPersons.length) {
+      if (r.crsType === "Entity" && r.controllingPersons && r.controllingPersons.length) {
         html += `<div class="sec-bar">Controlling Persons Info</div>
           <div class="sec-body" style="overflow:auto">
             <table>
@@ -1013,26 +1054,48 @@
               </div></div>
             </div></div>`;
           });
-        } else if (r.crsType === "Entity" && (r.accHolderType === "CRS102" || r.accHolderType === "CRS103")) {
-          html += `<div class="hint-bar">Account Holder Type 为 ${esc(r.accHolderType)}：无 Controlling Persons Info，详情不展示控制人。</div>`;
         }
       }
 
       html += `<div class="box"><div class="sec-bar light">Account Balance and Payments</div><div class="sec-body">
         ${row("Account Type", inp("accountType", m.accountType), "默认 Custodial Account")}
-        ${row("Account Balance", inp("accountBalance", m.accountBalance), "币种与金额之间空一格，金额无千分位")}
+        ${row("Account Balance", inp("accountBalance", m.accountBalance), "币种与金额之间空一格，金额无千分位；允许整数、1 位或 2 位小数，保存时去掉末尾多余的零，不强制补零到 2 位")}
         <div class="nested"><div class="sec-bar mid">Gross amount paid or credited to the account during the year</div>
           <div class="sec-body">
-            ${row("Dividends", inp("dividends", m.dividends))}
-            ${row("Interest", inp("interest", m.interest))}
-            ${r.crsType === "Entity" ? row("Proceeds from the Sale / Redemption of Financial Assets", inp("proceeds", m.proceeds)) : ""}
-            ${r.crsType === "Entity" ? row("Other Income", inp("otherIncome", m.otherIncome)) : ""}
+            ${row("Dividends", inp("dividends", m.dividends), "同 Account Balance 金额规则")}
+            ${row("Interest", inp("interest", m.interest), "同 Account Balance 金额规则")}
+            ${r.crsType === "Entity" ? row("Proceeds from the Sale / Redemption of Financial Assets", inp("proceeds", m.proceeds), "同 Account Balance 金额规则") : ""}
+            ${r.crsType === "Entity" ? row("Other Income", inp("otherIncome", m.otherIncome), "同 Account Balance 金额规则") : ""}
           </div>
         </div>
       </div></div>`;
 
       document.getElementById("tab-detail").innerHTML = html;
       applyFormMode();
+      bindMoneyInputs();
+    }
+
+    function bindMoneyInputs() {
+      const r = rec(currentId);
+      if (!r) return;
+      moneyFieldKeys(r).forEach(key => {
+        const el = document.querySelector(`[data-f="${key}"]`);
+        if (!el) return;
+        el.addEventListener("input", () => {
+          const v = el.value;
+          const m = v.match(/^([A-Za-z]{0,3})(\s*)(.*)$/);
+          if (!m) return;
+          let amt = m[3].replace(/[^\d.]/g, "");
+          const dot = amt.indexOf(".");
+          if (dot >= 0) amt = amt.slice(0, dot + 1) + amt.slice(dot + 1).replace(/\./g, "").slice(0, 2);
+          const gap = m[1].length === 3 && !m[2] && amt ? " " : m[2];
+          el.value = m[1] + gap + amt;
+        });
+        el.addEventListener("blur", () => {
+          const res = normalizeMoneyValue(el.value);
+          if (res.ok) el.value = res.value;
+        });
+      });
     }
 
     function collectForm() {
@@ -1061,6 +1124,15 @@
       if (detailMode !== "edit") return;
       collectForm();
       const r = rec(currentId);
+      const m = r.mapped;
+      for (const key of moneyFieldKeys(r)) {
+        const res = normalizeMoneyValue(m[key]);
+        if (!res.ok) {
+          toast("金额须为整数、1 位或 2 位小数（如 HKD 100、HKD 100.5、HKD 100.25）");
+          return;
+        }
+        m[key] = res.value;
+      }
       renderMain(r);
       renderDetailForm(r);
       toast("已保存，可用于生成 XML");
@@ -1078,9 +1150,14 @@
       return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}${sign}${hh}:${mm}`;
     }
     function parseMoney(s) {
-      const m = String(s || "").trim().match(/^([A-Z]{3})\s+(.+)$/);
-      if (!m) return { ccy: "HKD", amt: "0.00" };
-      return { ccy: m[1], amt: m[2].replace(/,/g, "") };
+      const res = normalizeMoneyValue(s);
+      if (res.ok) {
+        const m = res.value.match(/^([A-Z]{3})\s+(.+)$/);
+        return { ccy: m[1], amt: m[2] };
+      }
+      const fallback = String(s || "").trim().match(/^([A-Z]{3})\s+(.+)$/);
+      if (!fallback) return { ccy: "HKD", amt: "0" };
+      return { ccy: fallback[1], amt: fallback[2].replace(/,/g, "") };
     }
     function legalTypeCode(label) {
       const map = { Residential: "OECD302", Business: "OECD303", "Residential or Business": "OECD301", "Registered Office": "OECD304", Unspecified: "OECD305" };
@@ -1196,7 +1273,7 @@
         x += `          <AcctHolderType>${esc(m.entityHolderType || r.accHolderType)}</AcctHolderType>\n`;
       }
       x += `        </AccountHolder>\n`;
-      if (r.crsType === "Entity" && m.cps && m.cps.length && (m.entityHolderType || r.accHolderType) === "CRS101") {
+      if (r.crsType === "Entity" && m.cps && m.cps.length) {
         m.cps.forEach(cp => {
           x += `        <ControllingPerson>\n`;
           x += `          <Individual>\n${xmlPerson(cp, 12, false)}          </Individual>\n`;
@@ -1260,12 +1337,41 @@
       toast("已下载 " + lastXml.name);
     }
 
+    function filingEnvField() {
+      return `<div class="field" style="margin-bottom:10px"><label>报送环境</label>
+        <select id="f-env">
+          <option value="prod" selected>正式</option>
+          <option value="test">IRD 测试</option>
+        </select></div>
+        <div class="hint-bar">同一文件不能混正式码和测试码。OECD11 / OECD12 / OECD13 只用于香港税务局门户测试 / prior consent，不能当正式 File Return。</div>`;
+    }
+    function sync702DocTypes() {
+      const test = document.getElementById("f-env").value === "test";
+      document.getElementById("f-doctype").innerHTML = test
+        ? `<option value="OECD12">OECD12 测试更正 Corrected Test Data</option>
+           <option value="OECD13">OECD13 测试删除 Deletion of Test Data</option>`
+        : `<option value="OECD2">OECD2 更正 Corrected Data</option>
+           <option value="OECD3">OECD3 删除 Deletion of Data</option>`;
+    }
+
     function openCrs701() {
       const year = document.getElementById("q-year").value;
       const recs = DATA.filter(r => r.year === year);
       if (!recs.length) return toast("该申报年份没有数据");
-      const pack = buildXml(recs, "CRS701", { docTypeIndic: "OECD1" });
-      showXml("CRS701 新报 XML · Return Year " + year + " · " + recs.length + " 条", pack);
+      document.getElementById("modal-title").textContent = "生成 CRS701 新报 XML · Return Year " + year;
+      document.getElementById("modal-body").innerHTML = `
+        ${filingEnvField()}
+        <div class="field" style="margin-bottom:10px"><label>将生成账户</label>
+          <div class="muted">${recs.length} 条 · ${recs.map(r => r.clientAccount).join("、")}</div></div>
+        <div class="toolbar" style="padding-left:0"><button class="btn btn-primary" type="button" id="btn-mk701">生成 XML</button></div>
+        <div id="crs701-preview"></div>`;
+      document.getElementById("overlay").classList.add("show");
+      document.getElementById("btn-mk701").onclick = () => {
+        const test = document.getElementById("f-env").value === "test";
+        const pack = buildXml(recs, "CRS701", { docTypeIndic: test ? "OECD11" : "OECD1" });
+        lastXml = pack;
+        document.getElementById("crs701-preview").innerHTML = `<pre class="xml">${esc(pack.body)}</pre>`;
+      };
     }
 
     function openCrs702(singleId) {
@@ -1276,11 +1382,9 @@
       document.getElementById("modal-body").innerHTML = `
         <div class="field" style="margin-bottom:10px"><label>已选账户</label>
           <div class="muted">${recs.map(r => r.clientAccount).join("、")}</div></div>
+        ${filingEnvField()}
         <div class="field" style="margin-bottom:10px"><label>DocTypeIndic</label>
-          <select id="f-doctype">
-            <option value="OECD2">OECD2 更正 Corrected Data</option>
-            <option value="OECD3">OECD3 删除 Deletion of Data</option>
-          </select></div>
+          <select id="f-doctype"></select></div>
         <div class="field" style="margin-bottom:10px"><label>CorrFileSerialNumber（门户回执 8 位文件序号）</label>
           <input id="f-sn" maxlength="8" placeholder="例如 00000012" /></div>
         <div class="field"><label>CorrDocRefId（可空，默认用原 DocRefId）</label>
@@ -1288,6 +1392,8 @@
         <div class="toolbar" style="padding-left:0"><button class="btn btn-primary" type="button" id="btn-mk702">生成 XML</button></div>
         <div id="crs702-preview"></div>`;
       document.getElementById("overlay").classList.add("show");
+      sync702DocTypes();
+      document.getElementById("f-env").onchange = sync702DocTypes;
       document.getElementById("btn-mk702").onclick = () => {
         const sn = document.getElementById("f-sn").value.trim();
         if (!/^\d{8}$/.test(sn)) return toast("CorrFileSerialNumber 须为 8 位数字");
@@ -1307,6 +1413,7 @@
       setTimeout(() => t.style.display = "none", 2200);
     }
 
+    initYearSelect();
     search();
   </script>
 </body>
