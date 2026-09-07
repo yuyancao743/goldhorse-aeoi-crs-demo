@@ -84,7 +84,8 @@
       outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(61,126,255,.15);
     }
 
-    .toolbar { padding: 8px 18px 16px; display: flex; gap: 8px; flex-wrap: wrap; }
+    .toolbar { padding: 8px 18px 16px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .toolbar-right { margin-left: auto; display: flex; gap: 8px; }
     .btn {
       height: 32px; padding: 0 14px; border: 1px solid #d0d5dd; background: #fff; border-radius: 4px;
       font-size: 13px; cursor: pointer; color: var(--text);
@@ -162,6 +163,7 @@
     .fg-pair .pair-controls { grid-template-columns: minmax(140px, 1fr) auto minmax(150px, .75fr); }
     .fg-triple .triple-controls { grid-template-columns: minmax(120px, 1.1fr) auto minmax(110px, .7fr) auto minmax(130px, .8fr); }
     .pair-extra-label { color: #6b7280; font-size: 12px; white-space: nowrap; }
+    .subhead { font-weight: 700; font-size: 13px; padding: 10px 0 2px; color: #1f2933; }
     .module-title {
       font-size: 14px; font-weight: 700; color: #1f2933;
       padding: 2px 2px 8px; letter-spacing: .01em;
@@ -191,7 +193,25 @@
       position: fixed; top: 18px; right: 18px; background: #111827; color: #fff; padding: 10px 14px;
       border-radius: 6px; font-size: 13px; display: none; z-index: 80;
     }
-    .empty { padding: 40px; text-align: center; color: var(--muted); }
+    .pager {
+      display: flex; align-items: center; justify-content: flex-end; gap: 8px;
+      padding: 10px 14px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--line);
+    }
+    .pager .btn { height: 28px; padding: 0 10px; font-size: 12px; }
+    .pager .on { background: #2f6fed; color: #fff; border-color: #2f6fed; }
+    .ccy-table { width: 100%; margin-top: 8px; }
+    .ccy-table th { background: #eef0f3; color: #374151; }
+    .ccy-table td, .ccy-table th { padding: 6px 10px; }
+    .ccy-table tbody tr { cursor: default; }
+    .ccy-table tbody tr:hover { background: transparent; }
+    .pay-editor { border: 1px solid #d5dbe3; margin: 8px 0; }
+    .pay-editor .sec-body { padding: 8px 10px; }
+    .pay-ccy-row { display: grid; grid-template-columns: 90px 1fr 1fr 1fr 1fr; gap: 8px; align-items: end; padding: 6px 0; border-bottom: 1px solid #eef0f3; }
+    .pay-ccy-row:last-child { border-bottom: none; }
+    .pay-ccy-row label { display: block; font-size: 11px; color: #6b7280; margin-bottom: 4px; }
+    .pay-ccy-row input, .pay-ccy-row select { height: 30px; width: 100%; border: 1px solid #d8dee6; border-radius: 3px; padding: 0 8px; font-size: 13px; }
+    .bal-controls { display: grid; grid-template-columns: 110px 1fr; gap: 8px; align-items: center; }
+    .import-name { font-size: 12px; color: var(--muted); align-self: center; }
 
     @media (max-width: 1200px) {
       .filter { grid-template-columns: repeat(2, 1fr); }
@@ -283,10 +303,15 @@
             </div>
           </div>
           <div class="toolbar">
-            <button class="btn btn-primary" onclick="search()">查询</button>
-            <button class="btn" onclick="resetFilter()">重置</button>
+            <button class="btn" onclick="document.getElementById('pdf-import').click()">导入</button>
+            <input id="pdf-import" type="file" accept="application/pdf,.pdf" style="display:none" onchange="importPdf(this)" />
+            <span class="import-name" id="import-name"></span>
             <button class="btn" onclick="openCrs701()">按申报年份生成 CRS701 新报 XML</button>
             <button class="btn btn-warn" onclick="openCrs702()">勾选记录生成 CRS702 更正/删除 XML</button>
+            <div class="toolbar-right">
+              <button class="btn btn-primary" onclick="search()">查询</button>
+              <button class="btn" onclick="resetFilter()">重置</button>
+            </div>
           </div>
         </div>
 
@@ -300,6 +325,8 @@
                 <th>Account Holder Type</th>
                 <th>Tax Residency</th>
                 <th>Status</th>
+                <th>生成CRS701次数</th>
+                <th>生成CRS702次数</th>
                 <th>A/C Portfolio</th>
                 <th>Return Year</th>
                 <th>操作</th>
@@ -308,6 +335,7 @@
             <tbody id="tbody"></tbody>
           </table>
           <div id="list-empty" class="empty" style="display:none">无匹配记录</div>
+          <div class="pager" id="pager"></div>
         </div>
       </div>
 
@@ -358,6 +386,9 @@
       CRS802: "CP of legal person - other means",
       CRS803: "CP of legal person - senior managing official"
     };
+
+    const CCY_OPTIONS = ["HKD", "USD", "CNH", "EUR", "GBP", "SGD", "AUD"];
+    const PAGE_SIZE = 10;
 
     const RAW = [
       {
@@ -470,15 +501,159 @@
         cor: "HK",
         addressRaw: "FLAT B, 19/F\n33 KA WAI MAN RD\nKENNEDY TOWN, HK",
         controllingPersons: []
+      },
+      {
+        id: "ind-100135",
+        year: "2025",
+        clientAccount: "100135.001",
+        portfolio: 11302813.52,
+        status: "Active",
+        periodFrom: "2025-01-01",
+        periodTo: "2025-12-31",
+        ccy: "HKD",
+        crs501: 0, crs502: 0, crs503: 720518.90, crs504: 0,
+        payments: [
+          { ccy: "HKD", crs501: 0, crs502: 0, crs503: 720518.90, crs504: 0 },
+          { ccy: "USD", crs501: 0, crs502: 0, crs503: 827552.59, crs504: 0 }
+        ],
+        clientId: "100135.001",
+        crsType: "Individual",
+        accHolderType: "",
+        entityType: "",
+        taxResidency: "CN",
+        tin: "340702196901192027",
+        birthDate: "1969-01-19",
+        fullName: "YAN ZHANG",
+        orgName: "",
+        cor: "HK",
+        addressRaw: "Flat A 27/F, Phase 1 Tower 5 6 & 8 Lai Ying Street, Grand Victoria I Cheung Sha Wan Kowloon, Hong Kong",
+        controllingPersons: []
+      },
+      {
+        id: "ind-100011",
+        year: "2025",
+        clientAccount: "100011.001",
+        portfolio: 15301.30,
+        status: "Active",
+        periodFrom: "2025-01-01",
+        periodTo: "2025-12-31",
+        ccy: "HKD",
+        crs501: 0, crs502: 0, crs503: 0, crs504: 0,
+        clientId: "100011.001",
+        crsType: "Individual",
+        accHolderType: "",
+        entityType: "",
+        taxResidency: "CN",
+        tin: "440301199112290015",
+        birthDate: "1991-12-29",
+        fullName: "DAOYI LIU",
+        orgName: "",
+        cor: "CN",
+        addressRaw: "广东省深圳市龙华新区\n致远中路深圳北站西广场A1物业2层208A",
+        controllingPersons: []
+      },
+      {
+        id: "ind-100017",
+        year: "2025",
+        clientAccount: "100017.001",
+        portfolio: 0,
+        status: "Active",
+        periodFrom: "2025-01-01",
+        periodTo: "2025-12-31",
+        ccy: "HKD",
+        crs501: 0, crs502: 0, crs503: 0, crs504: 0,
+        clientId: "100017.001",
+        crsType: "Individual",
+        accHolderType: "",
+        entityType: "",
+        taxResidency: "CN",
+        tin: "310106198202220036",
+        birthDate: "1982-02-22",
+        fullName: "YI ZHANG",
+        orgName: "",
+        cor: "CN",
+        addressRaw: "中国上海市静安区\n新闸路1910弄1号1409室",
+        controllingPersons: []
+      },
+      {
+        id: "ind-100020",
+        year: "2025",
+        clientAccount: "100020.001",
+        portfolio: 318702.79,
+        status: "Active",
+        periodFrom: "2025-01-01",
+        periodTo: "2025-12-31",
+        ccy: "HKD",
+        crs501: 0, crs502: 0, crs503: 0, crs504: 0,
+        clientId: "100020.001",
+        crsType: "Individual",
+        accHolderType: "",
+        entityType: "",
+        taxResidency: "CN",
+        tin: "520102196310150019",
+        birthDate: "1963-10-15",
+        fullName: "YUAN LIAO",
+        orgName: "",
+        cor: "CN",
+        addressRaw: "中國貴州省貴陽市雲岩區\n中華北路238號22單位5號",
+        controllingPersons: []
+      },
+      {
+        id: "ind-100025",
+        year: "2025",
+        clientAccount: "100025.001",
+        portfolio: 362699.26,
+        status: "Active",
+        periodFrom: "2025-01-01",
+        periodTo: "2025-12-31",
+        ccy: "HKD",
+        crs501: 0, crs502: 0, crs503: 0, crs504: 0,
+        clientId: "100025.001",
+        crsType: "Individual",
+        accHolderType: "",
+        entityType: "",
+        taxResidency: "CN",
+        tin: "370725196907060011",
+        birthDate: "1969-07-06",
+        fullName: "NING LI",
+        orgName: "",
+        cor: "CN",
+        addressRaw: "中國山東省昌樂縣\n城南街道李家老莊村183號",
+        controllingPersons: []
+      },
+      {
+        id: "ind-100026",
+        year: "2025",
+        clientAccount: "100026.001",
+        portfolio: 27760.99,
+        status: "Active",
+        periodFrom: "2025-01-01",
+        periodTo: "2025-12-31",
+        ccy: "HKD",
+        crs501: 0, crs502: 0, crs503: 0, crs504: 0,
+        clientId: "100026.001",
+        crsType: "Individual",
+        accHolderType: "",
+        entityType: "",
+        taxResidency: "CN",
+        tin: "440301198611080018",
+        birthDate: "1986-11-08",
+        fullName: "WEI XU",
+        orgName: "",
+        cor: "CN",
+        addressRaw: "中國廣東省深圳市南山區\n創業路2052號海珠城海暉閣20E",
+        controllingPersons: []
       }
     ];
 
-    let DATA = RAW.map(r => ({ ...r, mapped: deriveMapped(r) }));
+    let DATA = RAW.map(r => ({ ...r, crs701Count: r.crs701Count || 0, crs702Count: r.crs702Count || 0, mapped: deriveMapped(r) }));
+    sortData();
     let filtered = DATA.slice();
     let currentId = null;
     let detailMode = "view";
     let lastXml = { name: "", body: "" };
     let selected = new Set();
+    let page = 1;
 
     function countryName(code) {
       if (!code) return "";
@@ -542,9 +717,12 @@
       return { ok: true, value: m[1].toUpperCase() + " " + stripAmtZeros(amt) };
     }
     function moneyFieldKeys(r) {
-      return r && r.crsType === "Entity"
-        ? ["accountBalance", "dividends", "interest", "proceeds", "otherIncome"]
-        : ["accountBalance", "dividends", "interest"];
+      return ["accountBalance"];
+    }
+    function paymentRows(r) {
+      if (r && r.mapped && Array.isArray(r.mapped.payments) && r.mapped.payments.length) return r.mapped.payments;
+      if (r && Array.isArray(r.payments) && r.payments.length) return r.payments;
+      return [{ ccy: (r && r.ccy) || "HKD", crs501: r && r.crs501 || 0, crs502: r && r.crs502 || 0, crs503: r && r.crs503 || 0, crs504: r && r.crs504 || 0 }];
     }
     function esc(s) {
       return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" }[c]));
@@ -639,10 +817,22 @@
         docRefId: "",
         accountType: "Custodial Account",
         accountBalance: money(r.ccy, r.portfolio),
-        dividends: money(r.ccy, r.crs501),
-        interest: money(r.ccy, r.crs502),
-        proceeds: money(r.ccy, r.crs503),
-        otherIncome: money(r.ccy, r.crs504),
+        balanceCcy: r.ccy || "HKD",
+        balanceAmt: fmtAmt(r.portfolio),
+        payments: (Array.isArray(r.payments) && r.payments.length
+          ? r.payments
+          : [{ ccy: r.ccy || "HKD", crs501: r.crs501 || 0, crs502: r.crs502 || 0, crs503: r.crs503 || 0, crs504: r.crs504 || 0 }]
+        ).map(p => ({
+          ccy: p.ccy,
+          crs501: p.crs501 || 0,
+          crs502: p.crs502 || 0,
+          crs503: p.crs503 || 0,
+          crs504: p.crs504 || 0,
+          dividends: money(p.ccy, p.crs501),
+          interest: money(p.ccy, p.crs502),
+          proceeds: money(p.ccy, p.crs503),
+          otherIncome: money(p.ccy, p.crs504)
+        })),
         remarks: ""
       };
       if (r.crsType === "Individual") {
@@ -654,6 +844,14 @@
           addr.city = "BEIJING";
           addr.country = "China";
           addr.countryCode = "CN";
+          addr.format = "Fixed";
+        }
+        if (r.clientAccount === "100135.001") {
+          addr.street = "Flat A 27/F, Phase 1 Tower 5 6 & 8 Lai Ying Street";
+          addr.district = "Cheung Sha Wan";
+          addr.city = "HONG KONG";
+          addr.country = "Hong Kong";
+          addr.countryCode = "HK";
           addr.format = "Fixed";
         }
         return {
@@ -754,6 +952,15 @@
       };
     }
 
+    function acctSortKey(r) {
+      return String(r.clientAccount || "");
+    }
+    function sortData() {
+      DATA.sort((a, b) => acctSortKey(a).localeCompare(acctSortKey(b), "en", { numeric: true }));
+    }
+    function isDupAccount(item) {
+      return DATA.some(r => r.year === item.year && r.clientAccount === item.clientAccount);
+    }
     function search() {
       const y = document.getElementById("q-year").value;
       const acct = document.getElementById("q-acct").value.trim().toLowerCase();
@@ -765,7 +972,8 @@
         if (crs && r.crsType !== crs) return false;
         if (aht && r.accHolderType !== aht) return false;
         return true;
-      });
+      }).sort((a, b) => acctSortKey(a).localeCompare(acctSortKey(b), "en", { numeric: true }));
+      page = 1;
       renderList();
     }
     function lastReturnYear() {
@@ -789,17 +997,27 @@
       search();
     }
     function toggleAll(on) {
-      filtered.forEach(r => on ? selected.add(r.id) : selected.delete(r.id));
+      pageRows().forEach(r => on ? selected.add(r.id) : selected.delete(r.id));
       renderList();
     }
-    function toggleOne(id, on) {
-      on ? selected.add(id) : selected.delete(id);
+    function pageCount() {
+      return Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+    }
+    function pageRows() {
+      const start = (page - 1) * PAGE_SIZE;
+      return filtered.slice(start, start + PAGE_SIZE);
+    }
+    function goPage(n) {
+      page = Math.min(pageCount(), Math.max(1, n));
+      renderList();
     }
 
     function renderList() {
+      if (page > pageCount()) page = pageCount();
+      const rows = pageRows();
       const tb = document.getElementById("tbody");
       document.getElementById("list-empty").style.display = filtered.length ? "none" : "block";
-      tb.innerHTML = filtered.map(r => `
+      tb.innerHTML = rows.map(r => `
         <tr class="${selected.has(r.id) ? "selected" : ""}">
           <td><input type="checkbox" ${selected.has(r.id) ? "checked" : ""} onclick="event.stopPropagation(); toggleOne('${r.id}', this.checked)" /></td>
           <td class="mono">${esc(r.clientAccount)}</td>
@@ -807,6 +1025,8 @@
           <td>${esc(r.accHolderType || "—")}</td>
           <td>${esc(r.taxResidency)}</td>
           <td><span class="tag tag-ok">${esc(r.status)}</span></td>
+          <td>${esc(r.crs701Count || 0)}</td>
+          <td>${esc(r.crs702Count || 0)}</td>
           <td>${esc(r.ccy + " " + n2(r.portfolio))}</td>
           <td>${esc(r.year)}</td>
           <td><div class="ops">
@@ -825,8 +1045,20 @@
           </div></td>
         </tr>`).join("");
       tb.querySelectorAll("tr").forEach((tr, i) => {
-        tr.addEventListener("click", () => openDetail(filtered[i].id, "view"));
+        tr.addEventListener("click", () => openDetail(rows[i].id, "view"));
       });
+      const total = pageCount();
+      const pages = [];
+      for (let i = 1; i <= total; i++) pages.push(i);
+      document.getElementById("pager").innerHTML = filtered.length ? `
+        <span>共 ${filtered.length} 条</span>
+        <button class="btn" ${page <= 1 ? "disabled" : ""} onclick="goPage(${page - 1})">上一页</button>
+        ${pages.map(i => `<button class="btn ${i === page ? "on" : ""}" onclick="goPage(${i})">${i}</button>`).join("")}
+        <button class="btn" ${page >= total ? "disabled" : ""} onclick="goPage(${page + 1})">下一页</button>
+      ` : "";
+    }
+    function toggleOne(id, on) {
+      on ? selected.add(id) : selected.delete(id);
     }
 
     function rec(id) { return DATA.find(x => x.id === id); }
@@ -868,11 +1100,31 @@
     function applyFormMode() {
       const root = document.getElementById("tab-detail");
       const lock = detailMode !== "edit";
-      root.querySelectorAll("input, select, textarea").forEach(el => { el.disabled = lock; });
+      root.querySelectorAll("input, select, textarea").forEach(el => {
+        el.disabled = lock || el.hasAttribute("data-lock");
+      });
     }
 
     function renderMain(r) {
       const addr = esc(r.addressRaw).replace(/\n/g, "<br>");
+      const pays = paymentRows(r);
+      const payTable = `
+        <table class="ccy-table">
+          <thead><tr>
+            <th>CCY</th>
+            <th>Dividends (CRS501)</th>
+            <th>Interest (CRS502)</th>
+            <th>Gross Proceeds / Redemptions (CRS503)</th>
+            <th>Other (CRS504)</th>
+          </tr></thead>
+          <tbody>${pays.map(p => `<tr>
+            <td>${esc(p.ccy)}</td>
+            <td>${n2(p.crs501)}</td>
+            <td>${n2(p.crs502)}</td>
+            <td>${n2(p.crs503)}</td>
+            <td>${n2(p.crs504)}</td>
+          </tr>`).join("")}</tbody>
+        </table>`;
       let html = `
         <div class="sec-bar">Account Info</div>
         <div class="sec-body">
@@ -882,12 +1134,8 @@
             ${kv("Status", esc(r.status))}
             ${kv("Period From", esc(r.periodFrom))}
             ${kv("Period To", esc(r.periodTo))}
-            ${kv("CCY", esc(r.ccy))}
-            ${kv("Dividends (CRS501)", fmtAmt(r.crs501))}
-            ${kv("Interest (CRS502)", fmtAmt(r.crs502))}
-            ${kv("Gross Proceeds / Redemptions (CRS503)", fmtAmt(r.crs503))}
-            ${kv("Other (CRS504)", fmtAmt(r.crs504))}
           </div>
+          ${payTable}
         </div>
         <div class="sec-bar">Account Holders Info</div>
         <div class="sec-body">
@@ -923,9 +1171,10 @@
       document.getElementById("tab-main").innerHTML = html;
     }
 
-    function inp(name, value, placeholder) {
+    function inp(name, value, placeholder, locked) {
       const ph = placeholder ? ` placeholder="${esc(placeholder)}"` : "";
-      return `<input data-f="${name}" value="${esc(value || "")}"${ph} />`;
+      const lock = locked ? " data-lock=\"1\" disabled" : "";
+      return `<input data-f="${name}" value="${esc(value || "")}"${ph}${lock} />`;
     }
     function sel(name, value, options) {
       const opts = options.map(o => {
@@ -979,12 +1228,23 @@
         + row("Country", inp(p + "birthCountry", m.birthCountry), countryHint || "")
         + row("Former Country Name", inp(p + "formerCountry", m.formerCountry));
     }
+    function paymentEditor(pays) {
+      const rows = pays && pays.length ? pays : [{ ccy: "HKD", crs501: 0, crs502: 0, crs503: 0, crs504: 0 }];
+      return rows.map((p, i) => `
+        <div class="pay-ccy-row">
+          <div><label>CCY</label>${sel("pays." + i + ".ccy", p.ccy, CCY_OPTIONS)}</div>
+          <div><label>Dividends (CRS501)</label><input data-f="pays.${i}.crs501" value="${esc(fmtAmt(p.crs501))}" /></div>
+          <div><label>Interest (CRS502)</label><input data-f="pays.${i}.crs502" value="${esc(fmtAmt(p.crs502))}" /></div>
+          <div><label>Gross Proceeds / Redemptions (CRS503)</label><input data-f="pays.${i}.crs503" value="${esc(fmtAmt(p.crs503))}" /></div>
+          <div><label>Other (CRS504)</label><input data-f="pays.${i}.crs504" value="${esc(fmtAmt(p.crs504))}" /></div>
+        </div>`).join("");
+    }
 
     function renderDetailForm(r) {
       const m = r.mapped;
       let html = "";
       html += `<div class="box"><div class="sec-bar light">Account Details</div><div class="sec-body">
-        ${row("Account Number", inp("accountNumber", m.accountNumber))}
+        ${row("Account Number", inp("accountNumber", m.accountNumber, "", true), "交易账号不可修改")}
         ${row("Account Number Type", inp("accountNumberType", m.accountNumberType), "固定 Other Securities Information Number (OSIN)")}
         ${row("Account Status", inp("accountStatus", m.accountStatus))}
         ${row("Undocumented Account", sel("undocumented", m.undocumented, ["No", "Yes"]), "固定 No")}
@@ -1059,13 +1319,10 @@
 
       html += `<div class="box"><div class="sec-bar light">Account Balance and Payments</div><div class="sec-body">
         ${row("Account Type", inp("accountType", m.accountType), "默认 Custodial Account")}
-        ${row("Account Balance", inp("accountBalance", m.accountBalance), "币种与金额之间空一格，金额无千分位；允许整数、1 位或 2 位小数，保存时去掉末尾多余的零，不强制补零到 2 位")}
+        ${row("Account Balance", `<div class="bal-controls">${sel("balanceCcy", m.balanceCcy, CCY_OPTIONS)}${inp("balanceAmt", m.balanceAmt)}</div>`, "币种下拉筛选；金额无千分位，允许整数、1 位或 2 位小数")}
         <div class="nested"><div class="sec-bar mid">Gross amount paid or credited to the account during the year</div>
-          <div class="sec-body">
-            ${row("Dividends", inp("dividends", m.dividends), "同 Account Balance 金额规则")}
-            ${row("Interest", inp("interest", m.interest), "同 Account Balance 金额规则")}
-            ${r.crsType === "Entity" ? row("Proceeds from the Sale / Redemption of Financial Assets", inp("proceeds", m.proceeds), "同 Account Balance 金额规则") : ""}
-            ${r.crsType === "Entity" ? row("Other Income", inp("otherIncome", m.otherIncome), "同 Account Balance 金额规则") : ""}
+          <div class="sec-body" id="pay-rows">
+            ${paymentEditor(m.payments || [])}
           </div>
         </div>
       </div></div>`;
@@ -1076,25 +1333,17 @@
     }
 
     function bindMoneyInputs() {
-      const r = rec(currentId);
-      if (!r) return;
-      moneyFieldKeys(r).forEach(key => {
-        const el = document.querySelector(`[data-f="${key}"]`);
-        if (!el) return;
-        el.addEventListener("input", () => {
-          const v = el.value;
-          const m = v.match(/^([A-Za-z]{0,3})(\s*)(.*)$/);
-          if (!m) return;
-          let amt = m[3].replace(/[^\d.]/g, "");
-          const dot = amt.indexOf(".");
-          if (dot >= 0) amt = amt.slice(0, dot + 1) + amt.slice(dot + 1).replace(/\./g, "").slice(0, 2);
-          const gap = m[1].length === 3 && !m[2] && amt ? " " : m[2];
-          el.value = m[1] + gap + amt;
-        });
-        el.addEventListener("blur", () => {
-          const res = normalizeMoneyValue(el.value);
-          if (res.ok) el.value = res.value;
-        });
+      const el = document.querySelector(`[data-f="balanceAmt"]`);
+      if (!el) return;
+      el.addEventListener("input", () => {
+        let amt = el.value.replace(/[^\d.]/g, "");
+        const dot = amt.indexOf(".");
+        if (dot >= 0) amt = amt.slice(0, dot + 1) + amt.slice(dot + 1).replace(/\./g, "").slice(0, 2);
+        el.value = amt;
+      });
+      el.addEventListener("blur", () => {
+        const t = String(el.value || "").trim();
+        if (isAmtToken(t)) el.value = stripAmtZeros(t);
       });
     }
 
@@ -1102,6 +1351,7 @@
       const root = document.getElementById("tab-detail");
       const r = rec(currentId);
       const m = r.mapped;
+      const payMap = {};
       root.querySelectorAll("[data-f]").forEach(el => {
         const path = el.getAttribute("data-f");
         const val = el.value;
@@ -1112,12 +1362,37 @@
             if (key === "cpTypeCode") m.cps[idx].cpTypeLabel = CP_TYPE_LABEL[val] || val;
             if (key === "firstName" || key === "lastName") m.cps[idx][key] = String(val || "").toUpperCase();
           }
+        } else if (path.startsWith("pays.")) {
+          const [, idx, key] = path.split(".");
+          if (!payMap[idx]) payMap[idx] = {};
+          payMap[idx][key] = val;
+        } else if (path === "accountNumber") {
+          /* 交易账号只读，不覆盖 */
         } else {
           m[path] = val;
           if (path === "entityHolderType") m.entityHolderTypeLabel = AH_TYPE_LABEL[val] || "";
           if (path === "firstName" || path === "lastName") m[path] = String(val || "").toUpperCase();
         }
       });
+      const idxs = Object.keys(payMap).sort((a, b) => Number(a) - Number(b));
+      if (idxs.length) {
+        m.payments = idxs.map(i => {
+          const p = payMap[i];
+          const ccy = (p.ccy || "HKD").toUpperCase();
+          const n501 = Number(String(p.crs501 || "0").replace(/,/g, ""));
+          const n502 = Number(String(p.crs502 || "0").replace(/,/g, ""));
+          const n503 = Number(String(p.crs503 || "0").replace(/,/g, ""));
+          const n504 = Number(String(p.crs504 || "0").replace(/,/g, ""));
+          return {
+            ccy,
+            crs501: n501, crs502: n502, crs503: n503, crs504: n504,
+            dividends: money(ccy, n501),
+            interest: money(ccy, n502),
+            proceeds: money(ccy, n503),
+            otherIncome: money(ccy, n504)
+          };
+        });
+      }
     }
 
     function saveDetail() {
@@ -1125,13 +1400,33 @@
       collectForm();
       const r = rec(currentId);
       const m = r.mapped;
-      for (const key of moneyFieldKeys(r)) {
-        const res = normalizeMoneyValue(m[key]);
-        if (!res.ok) {
-          toast("金额须为整数、1 位或 2 位小数（如 HKD 100、HKD 100.5、HKD 100.25）");
-          return;
+      const ccy = String(m.balanceCcy || "HKD").toUpperCase();
+      const amt = String(m.balanceAmt || "0").replace(/,/g, "").trim();
+      if (!isAmtToken(amt)) {
+        toast("Account Balance 金额须为整数、1 位或 2 位小数");
+        return;
+      }
+      m.balanceCcy = ccy;
+      m.balanceAmt = stripAmtZeros(amt);
+      m.accountBalance = money(ccy, m.balanceAmt);
+      r.ccy = ccy;
+      r.portfolio = Number(m.balanceAmt);
+      for (const p of m.payments || []) {
+        for (const k of ["crs501", "crs502", "crs503", "crs504"]) {
+          if (!Number.isFinite(Number(p[k]))) {
+            toast("付款金额须为数字");
+            return;
+          }
         }
-        m[key] = res.value;
+      }
+      r.payments = (m.payments || []).map(p => ({
+        ccy: p.ccy, crs501: p.crs501, crs502: p.crs502, crs503: p.crs503, crs504: p.crs504
+      }));
+      if (r.payments[0]) {
+        r.crs501 = r.payments[0].crs501;
+        r.crs502 = r.payments[0].crs502;
+        r.crs503 = r.payments[0].crs503;
+        r.crs504 = r.payments[0].crs504;
       }
       renderMain(r);
       renderDetailForm(r);
@@ -1281,18 +1576,19 @@
           x += `        </ControllingPerson>\n`;
         });
       }
-      const bal = parseMoney(m.accountBalance);
-      x += `        <AccountBalance currCode="${esc(bal.ccy)}">${esc(bal.amt)}</AccountBalance>\n`;
-      const pays = [
-        ["CRS501", m.dividends],
-        ["CRS502", m.interest]
-      ];
-      if (r.crsType === "Entity") {
-        pays.push(["CRS503", m.proceeds], ["CRS504", m.otherIncome]);
-      }
-      pays.forEach(([t, v]) => {
-        const p = parseMoney(v);
-        x += `        <Payment>\n          <Type>${t}</Type>\n          <PaymentAmnt currCode="${esc(p.ccy)}">${esc(p.amt)}</PaymentAmnt>\n        </Payment>\n`;
+      const balCcy = m.balanceCcy || parseMoney(m.accountBalance).ccy;
+      const balAmt = m.balanceAmt != null && m.balanceAmt !== "" ? stripAmtZeros(String(m.balanceAmt).replace(/,/g, "")) : parseMoney(m.accountBalance).amt;
+      x += `        <AccountBalance currCode="${esc(balCcy)}">${esc(balAmt)}</AccountBalance>\n`;
+      const pays = paymentRows(r);
+      pays.forEach(p => {
+        [
+          ["CRS501", p.crs501],
+          ["CRS502", p.crs502],
+          ["CRS503", p.crs503],
+          ["CRS504", p.crs504]
+        ].forEach(([t, amt]) => {
+          x += `        <Payment>\n          <Type>${t}</Type>\n          <PaymentAmnt currCode="${esc(p.ccy)}">${esc(fmtAmt(amt))}</PaymentAmnt>\n        </Payment>\n`;
+        });
       });
       x += `      </AccountReport>\n`;
       return x;
@@ -1370,6 +1666,7 @@
         const test = document.getElementById("f-env").value === "test";
         const pack = buildXml(recs, "CRS701", { docTypeIndic: test ? "OECD11" : "OECD1" });
         lastXml = pack;
+        bumpGenCount(recs, "crs701Count");
         document.getElementById("crs701-preview").innerHTML = `<pre class="xml">${esc(pack.body)}</pre>`;
       };
     }
@@ -1403,7 +1700,68 @@
           corrDocRefId: document.getElementById("f-corr").value.trim()
         });
         lastXml = pack;
+        bumpGenCount(recs, "crs702Count");
         document.getElementById("crs702-preview").innerHTML = `<pre class="xml">${esc(pack.body)}</pre>`;
+      };
+    }
+
+    function bumpGenCount(recs, key) {
+      recs.forEach(r => { r[key] = (r[key] || 0) + 1; });
+      renderList();
+    }
+
+    function importPdf(input) {
+      const file = input.files && input.files[0];
+      input.value = "";
+      if (!file) return;
+      if (!/\.pdf$/i.test(file.name)) return toast("仅支持 PDF 格式");
+      document.getElementById("import-name").textContent = "已选择：" + file.name;
+      const incoming = [pdfDemoRecord()];
+      let added = 0;
+      let skipped = 0;
+      incoming.forEach(item => {
+        if (isDupAccount(item)) {
+          skipped += 1;
+          return;
+        }
+        DATA.push({ ...item, crs701Count: 0, crs702Count: 0, mapped: deriveMapped(item) });
+        added += 1;
+      });
+      sortData();
+      initYearSelect();
+      document.getElementById("q-acct").value = "";
+      search();
+      if (added && skipped) toast("已导入 " + added + " 条，跳过重复 " + skipped + " 条：" + file.name);
+      else if (added) toast("已导入申报 PDF：" + file.name + "（" + added + " 条）");
+      else toast("重复账户已跳过，未新增记录：" + file.name);
+    }
+    function pdfDemoRecord() {
+      return {
+        id: "ind-100135",
+        year: lastReturnYear(),
+        clientAccount: "100135.001",
+        portfolio: 11302813.52,
+        status: "Active",
+        periodFrom: lastReturnYear() + "-01-01",
+        periodTo: lastReturnYear() + "-12-31",
+        ccy: "HKD",
+        crs501: 0, crs502: 0, crs503: 720518.90, crs504: 0,
+        payments: [
+          { ccy: "HKD", crs501: 0, crs502: 0, crs503: 720518.90, crs504: 0 },
+          { ccy: "USD", crs501: 0, crs502: 0, crs503: 827552.59, crs504: 0 }
+        ],
+        clientId: "100135.001",
+        crsType: "Individual",
+        accHolderType: "",
+        entityType: "",
+        taxResidency: "CN",
+        tin: "340702196901192027",
+        birthDate: "1969-01-19",
+        fullName: "YAN ZHANG",
+        orgName: "",
+        cor: "HK",
+        addressRaw: "Flat A 27/F, Phase 1 Tower 5 6 & 8 Lai Ying Street, Grand Victoria I Cheung Sha Wan Kowloon, Hong Kong",
+        controllingPersons: []
       };
     }
 
