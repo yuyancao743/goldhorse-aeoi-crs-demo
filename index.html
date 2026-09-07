@@ -646,7 +646,7 @@
       }
     ];
 
-    let DATA = RAW.map(r => ({ ...r, crs701Count: r.crs701Count || 0, crs702Count: r.crs702Count || 0, mapped: deriveMapped(r) }));
+    let DATA = RAW.map(r => ({ ...r, crs701Count: r.crs701Count || 0, crs702Count: r.crs702Count || 0, mappedTouched: false, mapped: deriveMapped(r) }));
     sortData();
     let filtered = DATA.slice();
     let currentId = null;
@@ -957,9 +957,6 @@
     }
     function sortData() {
       DATA.sort((a, b) => acctSortKey(a).localeCompare(acctSortKey(b), "en", { numeric: true }));
-    }
-    function isDupAccount(item) {
-      return DATA.some(r => r.year === item.year && r.clientAccount === item.clientAccount);
     }
     function search() {
       const y = document.getElementById("q-year").value;
@@ -1428,6 +1425,7 @@
         r.crs503 = r.payments[0].crs503;
         r.crs504 = r.payments[0].crs504;
       }
+      r.mappedTouched = true;
       renderMain(r);
       renderDetailForm(r);
       toast("已保存，可用于生成 XML");
@@ -1716,59 +1714,68 @@
       if (!file) return;
       if (!/\.pdf$/i.test(file.name)) return toast("仅支持 PDF 格式");
       document.getElementById("import-name").textContent = "已选择：" + file.name;
-      const incoming = [pdfDemoRecord()];
-      let added = 0;
-      let skipped = 0;
-      incoming.forEach(item => {
-        if (isDupAccount(item)) {
-          skipped += 1;
-          return;
+      const incoming = demoIncomingFromFile(file);
+      if (!incoming.length) return toast("导表错误：文件没有账户数据", 3500);
+      const years = [...new Set(incoming.map(r => String(r.year || "").trim()).filter(Boolean))];
+      const hasBlankYear = incoming.some(r => !String(r.year || "").trim());
+      if (hasBlankYear || years.length !== 1) {
+        return toast("导表错误：同一文件只能包含一个申报年份", 3500);
+      }
+      const year = years[0];
+      const oldByAcct = new Map();
+      DATA.filter(r => r.year === year).forEach(r => oldByAcct.set(r.clientAccount, r));
+      let kept = 0;
+      const nextYearRows = incoming.map(item => {
+        const old = oldByAcct.get(item.clientAccount);
+        if (old && old.mappedTouched) {
+          kept += 1;
+          return {
+            ...item,
+            id: old.id,
+            crs701Count: old.crs701Count || 0,
+            crs702Count: old.crs702Count || 0,
+            mapped: old.mapped,
+            mappedTouched: true
+          };
         }
-        DATA.push({ ...item, crs701Count: 0, crs702Count: 0, mapped: deriveMapped(item) });
-        added += 1;
+        return {
+          ...item,
+          crs701Count: old ? (old.crs701Count || 0) : 0,
+          crs702Count: old ? (old.crs702Count || 0) : 0,
+          mapped: deriveMapped(item),
+          mappedTouched: false
+        };
       });
+      DATA = DATA.filter(r => r.year !== year).concat(nextYearRows);
       sortData();
       initYearSelect();
+      document.getElementById("q-year").value = year;
       document.getElementById("q-acct").value = "";
       search();
-      if (added && skipped) toast("已导入 " + added + " 条，跳过重复 " + skipped + " 条：" + file.name);
-      else if (added) toast("已导入申报 PDF：" + file.name + "（" + added + " 条）");
-      else toast("重复账户已跳过，未新增记录：" + file.name);
+      const msg = kept
+        ? "已按 " + year + " 全量替换 " + nextYearRows.length + " 条，其中 " + kept + " 条仅更新主信息（详细信息已编辑，已保留）"
+        : "已按 " + year + " 全量替换 " + nextYearRows.length + " 条，并重新生成详细信息";
+      toast(msg, 4000);
     }
-    function pdfDemoRecord() {
-      return {
-        id: "ind-100135",
-        year: lastReturnYear(),
-        clientAccount: "100135.001",
-        portfolio: 11302813.52,
-        status: "Active",
-        periodFrom: lastReturnYear() + "-01-01",
-        periodTo: lastReturnYear() + "-12-31",
-        ccy: "HKD",
-        crs501: 0, crs502: 0, crs503: 720518.90, crs504: 0,
-        payments: [
-          { ccy: "HKD", crs501: 0, crs502: 0, crs503: 720518.90, crs504: 0 },
-          { ccy: "USD", crs501: 0, crs502: 0, crs503: 827552.59, crs504: 0 }
-        ],
-        clientId: "100135.001",
-        crsType: "Individual",
-        accHolderType: "",
-        entityType: "",
-        taxResidency: "CN",
-        tin: "340702196901192027",
-        birthDate: "1969-01-19",
-        fullName: "YAN ZHANG",
-        orgName: "",
-        cor: "HK",
-        addressRaw: "Flat A 27/F, Phase 1 Tower 5 6 & 8 Lai Ying Street, Grand Victoria I Cheung Sha Wan Kowloon, Hong Kong",
-        controllingPersons: []
-      };
+    function isMultiYearFileName(name) {
+      return /多年|multi[-_]?year|multiyear|20\d{2}\s*[-_~到至\/]\s*20\d{2}/i.test(name || "");
+    }
+    function demoIncomingFromFile(file) {
+      if (isMultiYearFileName(file.name)) {
+        const a = JSON.parse(JSON.stringify(RAW[0]));
+        const b = JSON.parse(JSON.stringify(RAW[1] || RAW[0]));
+        a.year = "2024";
+        b.year = "2025";
+        b.id = String(b.id) + "-y2";
+        return [a, b];
+      }
+      return JSON.parse(JSON.stringify(RAW));
     }
 
-    function toast(msg) {
+    function toast(msg, ms) {
       const t = document.getElementById("toast");
       t.textContent = msg; t.style.display = "block";
-      setTimeout(() => t.style.display = "none", 2200);
+      setTimeout(() => t.style.display = "none", ms || 2200);
     }
 
     initYearSelect();
