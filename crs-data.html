@@ -152,6 +152,23 @@
     .fg input, .fg select, .fg textarea {
       height: 30px; border: 1px solid #d8dee6; border-radius: 3px; padding: 0 8px; font-size: 13px; width: 100%;
     }
+    .fg textarea { height: auto; min-height: 72px; padding: 6px 8px; line-height: 1.4; resize: vertical; }
+    .req { color: #b42318; }
+    .addr-fmt {
+      display: flex; gap: 18px; align-items: center; height: 30px;
+    }
+    .addr-fmt label {
+      display: flex; align-items: center; gap: 6px; color: #111; font-size: 13px; white-space: nowrap;
+    }
+    .fg .addr-fmt input[type="radio"] {
+      width: auto; height: auto; padding: 0; margin: 0; accent-color: #1e3a5f;
+    }
+    .fg-addr-head .pair-controls {
+      grid-template-columns: minmax(170px, .75fr) auto minmax(200px, 1.1fr);
+    }
+    .addr-free-lines { display: grid; gap: 6px; width: 100%; }
+    .fg.addr-lines { align-items: start; }
+    .fg.addr-lines > label { padding-top: 8px; }
     .fg input[disabled], .fg select[disabled], .fg textarea[disabled] {
       background: #f7f8fa; color: #111; cursor: default; border-color: #e6e8ec;
       opacity: 1; -webkit-text-fill-color: #111;
@@ -395,6 +412,13 @@
     };
 
     const CCY_OPTIONS = ["HKD", "USD", "CNH", "EUR", "GBP", "SGD", "AUD"];
+    const LEGAL_ADDR_OPTS = [
+      ["Residential or Business", "Residential or Business"],
+      ["Residential", "Residential"],
+      ["Business", "Business"],
+      ["Registered Office", "Registered Office"],
+      ["Unspecified", "Unspecified"]
+    ];
     const PAGE_SIZE = 10;
 
     const RAW = [
@@ -670,8 +694,48 @@
       if (!name) return "";
       const n = name.trim().toLowerCase();
       if (window.CODE_BY_NAME && CODE_BY_NAME[n]) return CODE_BY_NAME[n];
-      const aliases = { china: "CN", "hong kong": "HK", "virgin islands, british": "VG", "british virgin islands": "VG" };
+      const aliases = {
+        china: "CN", "中国": "CN", "中國": "CN", "prc": "CN",
+        "hong kong": "HK", "香港": "HK", hk: "HK",
+        "virgin islands, british": "VG", "british virgin islands": "VG", bvi: "VG",
+        "英属维尔京群岛": "VG", "英屬維爾京群島": "VG",
+        macao: "MO", macau: "MO", "澳门": "MO", "澳門": "MO",
+        taiwan: "TW", "台湾": "TW", "台灣": "TW", "臺灣": "TW",
+        singapore: "SG", "新加坡": "SG"
+      };
       return aliases[n] || "";
+    }
+    function emptyFixAddr() {
+      return {
+        suite: "", floor: "", building: "", street: "", district: "",
+        city: "", countrySubentity: "", postalCode: "", poBox: "", remarks: ""
+      };
+    }
+    function countryFromAddress(raw) {
+      const text = String(raw || "");
+      if (!text.trim()) return { country: "", countryCode: "" };
+      const rules = [
+        [/英屬維爾京|英属维尔京|british virgin islands|virgin islands,\s*british|\bbvi\b/i, "VG"],
+        [/中華人民共和國|中华人民共和国|中國|中国|\bchina\b/i, "CN"],
+        [/香港|\bhong kong\b/i, "HK"],
+        [/(?:^|,\s*)HK\s*$/m, "HK"],
+        [/澳門|澳门|\bmacao\b|\bmacau\b/i, "MO"],
+        [/臺灣|台灣|台湾|\btaiwan\b/i, "TW"],
+        [/新加坡|\bsingapore\b/i, "SG"]
+      ];
+      const L = lines(raw);
+      const chunks = [...L].reverse().concat([text]);
+      for (const chunk of chunks) {
+        for (const [re, code] of rules) {
+          if (re.test(chunk)) return { countryCode: code, country: countryName(code) };
+        }
+        const exact = countryCodeFromName(String(chunk || "").replace(/[.,]/g, " ").trim());
+        if (exact) return { countryCode: exact, country: countryName(exact) };
+      }
+      if (/[\u4e00-\u9fff]/.test(text) && /[省市區区縣县]/.test(text)) {
+        return { countryCode: "CN", country: countryName("CN") };
+      }
+      return { country: "", countryCode: "" };
     }
     function titleFromTin(issuedByCode, tin) {
       if ((issuedByCode || "").toUpperCase() !== "CN" || !tin) return "";
@@ -736,84 +800,6 @@
     }
     function lines(addr) { return String(addr || "").split(/\r?\n/).map(x => x.trim()).filter(Boolean); }
 
-    function parseIndividualAddress(raw) {
-      const L = lines(raw);
-      const out = { street: "", district: "", city: "", country: "", countryCode: "", building: "", format: "Free" };
-      if (!L.length) return out;
-      const first = L[0];
-      if (/中国|中國|CHINA/i.test(first) && first.length <= 8) {
-        out.country = "China"; out.countryCode = "CN";
-      } else {
-        out.country = first; out.countryCode = countryCodeFromName(first);
-      }
-      if (L[1]) {
-        const cityMap = [
-          [/北京/, "BEIJING"], [/上海/, "SHANGHAI"], [/深圳/, "SHENZHEN"], [/广州|廣州/, "GUANGZHOU"],
-          [/杭州/, "HANGZHOU"], [/成都/, "CHENGDU"], [/武汉|武漢/, "WUHAN"], [/重庆|重慶/, "CHONGQING"],
-          [/贵阳|貴陽/, "GUIYANG"], [/太原/, "TAIYUAN"]
-        ];
-        for (const [re, en] of cityMap) { if (re.test(L[1])) { out.city = en; break; } }
-        const dm = L[1].match(/([\u4e00-\u9fff]{1,8}[区區])$/);
-        if (dm) out.district = dm[1];
-        else {
-          const dm2 = L[1].match(/([\u4e00-\u9fff]+[区區])/);
-          if (dm2) out.district = dm2[1];
-        }
-      }
-      if (L[2]) out.street = L[2];
-      else if (L[1] && !out.street) out.street = L[1];
-      out.format = out.city ? "Fixed" : "Free";
-      return out;
-    }
-
-    function parseEntityAddress(raw) {
-      const L = lines(raw);
-      const out = { building: "", street: "", district: "", city: "", country: "", countryCode: "", format: "Free" };
-      if (!L.length) return out;
-      out.building = L[0] || "";
-      if (L[1]) {
-        const dist = L[1].match(/([^,]+)\s+District/i);
-        if (dist) {
-          out.district = dist[1].trim().replace(/,$/, "");
-          out.street = L[1].replace(/,?\s*[^,]*District.*$/i, "").replace(/,$/, "").trim();
-        } else {
-          out.street = L[1];
-        }
-      }
-      const last = L[L.length - 1] || "";
-      const cityCountry = last.match(/^([A-Za-z\s]+?)\s+(China|Hong Kong|Singapore|Seychelles)$/i);
-      if (cityCountry) {
-        out.city = cityCountry[1].trim().toUpperCase();
-        out.country = countryName(countryCodeFromName(cityCountry[2])) || (cityCountry[2][0].toUpperCase() + cityCountry[2].slice(1).toLowerCase());
-        out.countryCode = countryCodeFromName(cityCountry[2]) || countryCodeFromName(out.country);
-      } else if (/china|hong kong|british virgin|singapore/i.test(last) && !/[0-9]/.test(last)) {
-        if (/china/i.test(last) && /beijing/i.test(last)) { out.city = "BEIJING"; out.country = "China"; out.countryCode = "CN"; }
-        else if (/british virgin/i.test(last)) { out.country = "Virgin Islands, British"; out.countryCode = "VG"; }
-        else if (/hong kong|, hk$/i.test(last)) { out.country = "Hong Kong"; out.countryCode = "HK"; }
-        else if (/china/i.test(last)) { out.country = "China"; out.countryCode = "CN"; }
-      } else if (L.length >= 3) {
-        const mid = last.replace(/,?\s*(China|Hong Kong|HK)$/i, "").trim();
-        if (/beijing/i.test(mid)) out.city = "BEIJING";
-        else if (/hong kong|kennedy town/i.test(last)) { out.city = ""; out.country = "Hong Kong"; out.countryCode = "HK"; }
-        if (/china/i.test(last)) { out.country = "China"; out.countryCode = "CN"; }
-        if (/hong kong|, hk$/i.test(last)) { out.country = "Hong Kong"; out.countryCode = "HK"; }
-      }
-      out.format = out.city ? "Fixed" : "Free";
-      return out;
-    }
-
-    function parseCPAddress(raw) {
-      const L = lines(raw);
-      const joined = L.join(", ");
-      const out = parseEntityAddress(raw);
-      if (!out.city && /beijing/i.test(joined)) out.city = "BEIJING";
-      if (!out.country && /china/i.test(joined)) { out.country = "China"; out.countryCode = "CN"; }
-      if (/haidian/i.test(joined) && !out.district) out.district = "Haidian";
-      if (/fengxiu/i.test(joined) && !out.street) out.street = "Fengxiu East Road";
-      out.format = out.city ? "Fixed" : "Free";
-      return out;
-    }
-
     function deriveMapped(r) {
       const base = {
         docType: "Submit new record",
@@ -844,23 +830,7 @@
       };
       if (r.crsType === "Individual") {
         const nm = splitName(r.fullName);
-        const addr = parseIndividualAddress(r.addressRaw);
-        if (r.clientAccount === "100006.001") {
-          addr.street = "北京香頌227棟1102";
-          addr.district = "朝陽區";
-          addr.city = "BEIJING";
-          addr.country = "China";
-          addr.countryCode = "CN";
-          addr.format = "Fixed";
-        }
-        if (r.clientAccount === "100135.001") {
-          addr.street = "Flat A 27/F, Phase 1 Tower 5 6 & 8 Lai Ying Street";
-          addr.district = "Cheung Sha Wan";
-          addr.city = "HONG KONG";
-          addr.country = "Hong Kong";
-          addr.countryCode = "HK";
-          addr.format = "Fixed";
-        }
+        const loc = countryFromAddress(r.addressRaw);
         return {
           ...base,
           residenceCountry: countryName(r.cor),
@@ -873,11 +843,10 @@
           precedingTitle: "", firstName: nm.first, middleName: nm.middle, namePrefix: "",
           lastName: nm.last, generation: "", suffix: "", generalSuffix: "",
           legalAddressType: "Residential",
-          street: addr.street, suite: "", floor: "", building: "",
-          district: addr.district, city: addr.city, countrySubentity: "",
-          country: addr.country, countryCode: addr.countryCode || r.cor,
-          postalCode: "", poBox: "", remarks: "",
-          addressFormat: addr.format,
+          ...emptyFixAddr(),
+          country: loc.country, countryCode: loc.countryCode,
+          ...freeLineFields(r.addressRaw),
+          addressFormat: "Free",
           birthDate: fmtDMY(r.birthDate, "/"),
           birthDateIso: r.birthDate,
           birthCity: "CHINA",
@@ -888,31 +857,11 @@
           cps: []
         };
       }
-      const addr = parseEntityAddress(r.addressRaw);
-      if (r.clientAccount === "700029.001") {
-        addr.building = "Room 2402, Unit 2, Building 4, Yard 9,";
-        addr.street = "Fengxiu East Road";
-        addr.district = "Haidian";
-        addr.city = "BEIJING";
-        addr.country = "China";
-        addr.countryCode = "CN";
-        addr.format = "Fixed";
-      }
+      const loc = countryFromAddress(r.addressRaw);
       const showCP = r.crsType === "Entity" && r.controllingPersons && r.controllingPersons.length;
       const cps = showCP ? r.controllingPersons.map((cp, i) => {
         const nm = splitName(cp.fullName);
-        let a = parseCPAddress(cp.addressRaw);
-        if (r.clientAccount === "700029.001") {
-          a = {
-            building: "Room 2402, Unit 2, Building 4, Yard 9,",
-            street: "Fengxiu East Road",
-            district: "Haidian",
-            city: "BEIJING",
-            country: "China",
-            countryCode: "CN",
-            format: "Fixed"
-          };
-        }
+        const cpLoc = countryFromAddress(cp.addressRaw);
         return {
           seq: i + 1,
           cpTypeCode: "CRS801",
@@ -927,10 +876,10 @@
           precedingTitle: "", firstName: nm.first, middleName: nm.middle, namePrefix: "",
           lastName: nm.last, generation: "", suffix: "", generalSuffix: "",
           legalAddressType: "Residential",
-          suite: "", floor: "", building: a.building, street: a.street, district: a.district,
-          city: a.city, countrySubentity: "", country: a.country, countryCode: a.countryCode || cp.cor,
-          postalCode: "", poBox: "", remarks: "",
-          addressFormat: a.format,
+          ...emptyFixAddr(),
+          country: cpLoc.country, countryCode: cpLoc.countryCode,
+          ...freeLineFields(cp.addressRaw),
+          addressFormat: "Free",
           birthDate: fmtDMY(cp.birthDate, "/"),
           birthDateIso: cp.birthDate,
           birthCity: "", birthCitySub: "", birthCountry: countryName(cp.cor), formerCountry: ""
@@ -949,11 +898,10 @@
         orgName: r.orgName,
         nameType: "Legal Name",
         legalAddressType: "Business",
-        suite: "", floor: "", building: addr.building, street: addr.street, district: addr.district,
-        city: addr.city, countrySubentity: "",
-        country: addr.country, countryCode: addr.countryCode,
-        postalCode: "", poBox: "", remarks: "",
-        addressFormat: addr.format,
+        ...emptyFixAddr(),
+        country: loc.country, countryCode: loc.countryCode,
+        ...freeLineFields(r.addressRaw),
+        addressFormat: "Free",
         tin: r.tin,
         cps
       };
@@ -1094,7 +1042,7 @@
       document.getElementById("btn-save").style.display = detailMode === "edit" ? "" : "none";
       document.getElementById("tab-btn-detail").textContent = detailMode === "edit" ? "详细信息（可编辑）" : "详细信息";
       document.getElementById("detail-hint").textContent = detailMode === "edit"
-        ? "可修改详细信息中的映射字段后保存。主信息为源数据快照。有 City 时 Address Format 默认为 Fixed，否则为 Free。"
+        ? "可修改详细信息中的映射字段后保存。主信息为源数据快照。Address Format 默认 Free；Country 取地址中的国家；Address 为主信息全文。Fixed 字段为空，须手工填写。"
         : "当前为查看模式，字段只读，不可编辑。请使用列表中的编辑图标进入编辑。";
       switchTab("main");
       renderMain(r);
@@ -1188,11 +1136,11 @@
       }).join("");
       return `<select data-f="${name}">${opts}</select>`;
     }
-    function row(label, control, hint) {
-      return `<div class="fg"><label>${label}</label>${control}${hint ? `<div class="hint">${hint}</div>` : ""}</div>`;
+    function row(label, control, hint, extraClass) {
+      return `<div class="fg${extraClass ? " " + extraClass : ""}"><label>${label}</label>${control}${hint ? `<div class="hint">${hint}</div>` : ""}</div>`;
     }
-    function pairRow(label, mainCtrl, extraLabel, extraCtrl, hint) {
-      return `<div class="fg fg-pair"><label>${label}</label><div class="pair-controls">${mainCtrl}<span class="pair-extra-label">${extraLabel}</span>${extraCtrl}</div>${hint ? `<div class="hint">${hint}</div>` : ""}</div>`;
+    function pairRow(label, mainCtrl, extraLabel, extraCtrl, hint, extraClass) {
+      return `<div class="fg fg-pair${extraClass ? " " + extraClass : ""}"><label>${label}</label><div class="pair-controls">${mainCtrl}<span class="pair-extra-label">${extraLabel}</span>${extraCtrl}</div>${hint ? `<div class="hint">${hint}</div>` : ""}</div>`;
     }
     function tripleRow(label, mainCtrl, l1, c1, l2, c2, hint) {
       return `<div class="fg fg-triple"><label>${label}</label><div class="triple-controls">${mainCtrl}<span class="pair-extra-label">${l1}</span>${c1}<span class="pair-extra-label">${l2}</span>${c2}</div>${hint ? `<div class="hint">${hint}</div>` : ""}</div>`;
@@ -1209,20 +1157,62 @@
         + row("Suffix", inp(p + "suffix", m.suffix))
         + row("General Suffix", inp(p + "generalSuffix", m.generalSuffix));
     }
+    function isoCountrySel(name, selected) {
+      const code = countryCodeOf(selected);
+      const opts = Object.keys(ISO_COUNTRIES)
+        .sort((a, b) => ISO_COUNTRIES[a].localeCompare(ISO_COUNTRIES[b]))
+        .map(c => [c, ISO_COUNTRIES[c]]);
+      if (!code) opts.unshift(["", ""]);
+      return sel(name, code, opts);
+    }
+    function toggleAddrFormat(val, freeId, fixId) {
+      const freeEl = document.getElementById(freeId);
+      const fixEl = document.getElementById(fixId);
+      if (freeEl) freeEl.style.display = val === "Fixed" ? "none" : "block";
+      if (fixEl) {
+        fixEl.style.display = val === "Fixed" ? "block" : "none";
+        if (val === "Fixed") {
+          fixEl.querySelectorAll("input, textarea, select").forEach(el => { el.value = ""; });
+        }
+      }
+    }
     function addressBlock(p, m, legalHint) {
-      return row("Address Format", sel(p + "addressFormat", m.addressFormat, ["Fixed", "Free"]), "有 City → Fixed，否则 Free")
-        + row("Legal Address Type", inp(p + "legalAddressType", m.legalAddressType), legalHint || "")
+      const fmt = m.addressFormat || "Free";
+      const uid = "addr-" + String(p || "h").replace(/\./g, "_");
+      const freeId = uid + "-free";
+      const fixId = uid + "-fix";
+      const radioName = uid + "-fmt";
+      const fmtRadios = `<div class="addr-fmt">
+            <label><input type="radio" name="${radioName}" data-f="${p}addressFormat" value="Fixed"${fmt === "Fixed" ? " checked" : ""} onchange="toggleAddrFormat('Fixed','${freeId}','${fixId}')" /> Fixed</label>
+            <label><input type="radio" name="${radioName}" data-f="${p}addressFormat" value="Free"${fmt !== "Fixed" ? " checked" : ""} onchange="toggleAddrFormat('Free','${freeId}','${fixId}')" /> Free</label>
+          </div>`;
+      const lines = [
+        m.addressFree1, m.addressFree2, m.addressFree3, m.addressFree4, m.addressFree5
+      ].map(v => v || "");
+      if (!lines.some(Boolean) && m.addressFree) {
+        const split = splitToFive(m.addressFree);
+        split.forEach((v, i) => { lines[i] = v; });
+      }
+      const lineInputs = `<div class="addr-free-lines">${[1, 2, 3, 4, 5].map(i =>
+        `<input data-f="${p}addressFree${i}" maxlength="150" value="${esc(lines[i - 1] || "")}" />`
+      ).join("")}</div>`;
+      return pairRow("Address Format", fmtRadios, "Legal Address Type", sel(p + "legalAddressType", m.legalAddressType, LEGAL_ADDR_OPTS), legalHint || "", "fg-addr-head")
+        + row("Country <span class=\"req\">*</span>", isoCountrySel(p + "countryCode", m.countryCode || m.country), "取自主信息地址中的国家（中英文均可）")
+        + `<div id="${freeId}" style="display:${fmt === "Fixed" ? "none" : "block"}">`
+        + row("Address <span class=\"req\">*</span>", lineInputs, "主信息 Address 全文。最多 5 行，每行 150 字符。中文允许。", "addr-lines")
+        + `</div>`
+        + `<div id="${fixId}" style="display:${fmt === "Fixed" ? "block" : "none"}">`
         + row("Suite", inp(p + "suite", m.suite))
         + row("Floor", inp(p + "floor", m.floor))
         + row("Building", inp(p + "building", m.building))
         + row("Street", inp(p + "street", m.street))
         + row("District", inp(p + "district", m.district))
-        + row("City", inp(p + "city", m.city))
+        + row("City <span class=\"req\">*</span>", inp(p + "city", m.city), "选中 Fixed 后各字段为空，须手工填写；City 必填")
         + row("Country Subentity", inp(p + "countrySubentity", m.countrySubentity))
-        + row("Country", inp(p + "country", m.country))
         + row("Postal Code", inp(p + "postalCode", m.postalCode))
         + row("PO Box", inp(p + "poBox", m.poBox))
-        + row("Remarks", inp(p + "remarks", m.remarks));
+        + row("Remarks", inp(p + "remarks", m.remarks))
+        + `</div>`;
     }
     function birthBlock(p, m, cityHint, countryHint) {
       return row("Date of Birth", inp(p + "birthDate", m.birthDate), "DD/MM/YYYY")
@@ -1357,6 +1347,7 @@
       const m = r.mapped;
       const payMap = {};
       root.querySelectorAll("[data-f]").forEach(el => {
+        if (el.type === "radio" && !el.checked) return;
         const path = el.getAttribute("data-f");
         const val = el.value;
         if (path.startsWith("cps.")) {
@@ -1397,6 +1388,8 @@
           };
         });
       }
+      syncAddrMapped(m);
+      (m.cps || []).forEach(syncAddrMapped);
     }
 
     function saveDetail() {
@@ -1474,15 +1467,52 @@
       return countryCodeFromName(nameOrCode) || "";
     }
 
+    function splitToFive(text) {
+      const chunks = [];
+      String(text || "").replace(/\r\n/g, "\n").split("\n").forEach(raw => {
+        let line = String(raw || "").trim();
+        if (!line) return;
+        while (line.length > 150 && chunks.length < 5) {
+          chunks.push(line.slice(0, 150));
+          line = line.slice(150);
+        }
+        if (line && chunks.length < 5) chunks.push(line);
+      });
+      const out = ["", "", "", "", ""];
+      chunks.slice(0, 5).forEach((c, i) => { out[i] = c; });
+      return out;
+    }
+    function freeLineFields(raw) {
+      const lines = splitToFive(raw);
+      return {
+        addressFree: String(raw || ""),
+        addressFree1: lines[0],
+        addressFree2: lines[1],
+        addressFree3: lines[2],
+        addressFree4: lines[3],
+        addressFree5: lines[4]
+      };
+    }
+    function syncAddrMapped(obj) {
+      if (!obj) return;
+      obj.addressFree = [1, 2, 3, 4, 5].map(i => String(obj["addressFree" + i] || "").trim()).filter(Boolean).join("\n");
+      if (obj.countryCode) obj.country = countryName(obj.countryCode);
+    }
+    function freeAddrLinesFromMapped(m) {
+      const fromFields = [1, 2, 3, 4, 5].map(i => String(m["addressFree" + i] || "").trim()).filter(Boolean).map(l => l.slice(0, 150));
+      if (fromFields.length) return fromFields;
+      return splitToFive(m.addressFree || "").filter(Boolean);
+    }
+
     function xmlAddress(m, indent) {
       const sp = " ".repeat(indent);
       const cc = countryCodeOf(m.countryCode || m.country);
       let x = `${sp}<Address legalAddressType="${legalTypeCode(m.legalAddressType)}">\n`;
       x += `${sp}  <CountryCode>${esc(cc)}</CountryCode>\n`;
-      if (m.addressFormat === "Free" && !m.city) {
-        const free = [m.building, m.street, [m.district, m.city].filter(Boolean).join(" "), m.country].filter(Boolean);
+      if ((m.addressFormat || "Free") !== "Fixed") {
+        const free = freeAddrLinesFromMapped(m);
         x += `${sp}  <AddressFree>\n`;
-        (free.length ? free : [""]).slice(0, 5).forEach(line => { x += `${sp}    <Line>${esc(line)}</Line>\n`; });
+        (free.length ? free : [""]).forEach(line => { x += `${sp}    <Line>${esc(line)}</Line>\n`; });
         x += `${sp}  </AddressFree>\n`;
       } else {
         x += `${sp}  <AddressFix>\n`;
