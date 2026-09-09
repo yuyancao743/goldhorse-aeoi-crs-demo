@@ -175,6 +175,13 @@
       background: #f8fafc; border: 1px dashed #cbd5e1; color: #64748b; font-size: 12px;
       padding: 8px 12px; margin-bottom: 12px; border-radius: 4px;
     }
+    .filing-stats {
+      background: #f8fafc; border: 1px solid #d5dbe3; border-radius: 4px;
+      padding: 10px 12px; margin-bottom: 12px; font-size: 13px;
+    }
+    .filing-stats label { display: block; margin-bottom: 6px; font-weight: 650; }
+    .filing-stats .stat { color: #1f2933; margin: 4px 0; }
+    .filing-stats .note { color: #64748b; font-size: 12px; margin-top: 8px; }
 
     /* ===== Modal ===== */
     .overlay {
@@ -1639,6 +1646,23 @@
         </select></div>
         <div class="hint-bar">同一文件不能混正式码和测试码。OECD11 / OECD12 / OECD13 只用于香港税务局门户测试 / prior consent，不能当正式 File Return。</div>`;
     }
+    function isUndocumented(r) {
+      return String((r.mapped && r.mapped.undocumented) || r.undocumented || "No") === "Yes";
+    }
+    function filingCopyStats(recs) {
+      const year = (recs[0] && recs[0].year) || "";
+      const reportable = recs.length;
+      const undocumented = recs.filter(isUndocumented).length;
+      const from = year ? year + "-01-01" : "";
+      const to = year ? year + "-12-31" : "";
+      return `<div class="filing-stats">
+        <label>加密 / File Return 照抄（不写入 XML）</label>
+        <div class="stat">Total of reportable accounts：${reportable}</div>
+        <div class="stat">Total of undocumented accounts：${undocumented}</div>
+        <div class="stat">Period to which the data files relate：${esc(from)} 至 ${esc(to)}</div>
+        <div class="note">中台按本文件账户算出。加密与 File Return 时由合规照抄，勿再人工点数。</div>
+      </div>`;
+    }
     function sync702DocTypes() {
       const test = document.getElementById("f-env").value === "test";
       document.getElementById("f-doctype").innerHTML = test
@@ -1654,6 +1678,7 @@
       if (!recs.length) return toast("该申报年份没有数据");
       document.getElementById("modal-title").textContent = "生成 CRS701 新报 XML · Return Year " + year;
       document.getElementById("modal-body").innerHTML = `
+        ${filingCopyStats(recs)}
         ${filingEnvField()}
         <div class="field" style="margin-bottom:10px"><label>将生成账户</label>
           <div class="muted">${recs.length} 条 · ${recs.map(r => r.clientAccount).join("、")}</div></div>
@@ -1675,6 +1700,7 @@
       const recs = ids.map(rec).filter(Boolean);
       document.getElementById("modal-title").textContent = "生成 CRS702 更正/删除 XML";
       document.getElementById("modal-body").innerHTML = `
+        ${filingCopyStats(recs)}
         <div class="field" style="margin-bottom:10px"><label>已选账户</label>
           <div class="muted">${recs.map(r => r.clientAccount).join("、")}</div></div>
         ${filingEnvField()}
