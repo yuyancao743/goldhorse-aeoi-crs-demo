@@ -167,6 +167,9 @@
       grid-template-columns: minmax(170px, .75fr) auto minmax(200px, 1.1fr);
     }
     .addr-free-lines { display: grid; gap: 6px; width: 100%; }
+    .addr-fix { display: none; }
+    .addr-block:has(input[value="Fixed"]:checked) .addr-free { display: none; }
+    .addr-block:has(input[value="Fixed"]:checked) .addr-fix { display: block; }
     .fg.addr-lines { align-items: start; }
     .fg.addr-lines > label { padding-top: 8px; }
     .fg input[disabled], .fg select[disabled], .fg textarea[disabled] {
@@ -1053,7 +1056,8 @@
       const root = document.getElementById("tab-detail");
       const lock = detailMode !== "edit";
       root.querySelectorAll("input, select, textarea").forEach(el => {
-        el.disabled = lock || el.hasAttribute("data-lock");
+        const formatRadio = el.type === "radio" && /addressFormat$/.test(el.getAttribute("data-f") || "");
+        el.disabled = (lock && !formatRadio) || el.hasAttribute("data-lock");
       });
     }
 
@@ -1123,10 +1127,11 @@
       document.getElementById("tab-main").innerHTML = html;
     }
 
-    function inp(name, value, placeholder, locked) {
+    function inp(name, value, placeholder, locked, maxLength) {
       const ph = placeholder ? ` placeholder="${esc(placeholder)}"` : "";
       const lock = locked ? " data-lock=\"1\" disabled" : "";
-      return `<input data-f="${name}" value="${esc(value || "")}"${ph}${lock} />`;
+      const max = maxLength ? ` maxlength="${maxLength}"` : "";
+      return `<input data-f="${name}" value="${esc(value || "")}"${ph}${lock}${max} />`;
     }
     function sel(name, value, options) {
       const opts = options.map(o => {
@@ -1165,26 +1170,13 @@
       if (!code) opts.unshift(["", ""]);
       return sel(name, code, opts);
     }
-    function toggleAddrFormat(val, freeId, fixId) {
-      const freeEl = document.getElementById(freeId);
-      const fixEl = document.getElementById(fixId);
-      if (freeEl) freeEl.style.display = val === "Fixed" ? "none" : "block";
-      if (fixEl) {
-        fixEl.style.display = val === "Fixed" ? "block" : "none";
-        if (val === "Fixed") {
-          fixEl.querySelectorAll("input, textarea, select").forEach(el => { el.value = ""; });
-        }
-      }
-    }
     function addressBlock(p, m, legalHint) {
       const fmt = m.addressFormat || "Free";
       const uid = "addr-" + String(p || "h").replace(/\./g, "_");
-      const freeId = uid + "-free";
-      const fixId = uid + "-fix";
       const radioName = uid + "-fmt";
       const fmtRadios = `<div class="addr-fmt">
-            <label><input type="radio" name="${radioName}" data-f="${p}addressFormat" value="Fixed"${fmt === "Fixed" ? " checked" : ""} onchange="toggleAddrFormat('Fixed','${freeId}','${fixId}')" /> Fixed</label>
-            <label><input type="radio" name="${radioName}" data-f="${p}addressFormat" value="Free"${fmt !== "Fixed" ? " checked" : ""} onchange="toggleAddrFormat('Free','${freeId}','${fixId}')" /> Free</label>
+            <label><input type="radio" name="${radioName}" data-f="${p}addressFormat" value="Fixed"${fmt === "Fixed" ? " checked" : ""} /> Fixed</label>
+            <label><input type="radio" name="${radioName}" data-f="${p}addressFormat" value="Free"${fmt !== "Fixed" ? " checked" : ""} /> Free</label>
           </div>`;
       const lines = [
         m.addressFree1, m.addressFree2, m.addressFree3, m.addressFree4, m.addressFree5
@@ -1196,23 +1188,24 @@
       const lineInputs = `<div class="addr-free-lines">${[1, 2, 3, 4, 5].map(i =>
         `<input data-f="${p}addressFree${i}" maxlength="150" value="${esc(lines[i - 1] || "")}" />`
       ).join("")}</div>`;
-      return pairRow("Address Format", fmtRadios, "Legal Address Type", sel(p + "legalAddressType", m.legalAddressType, LEGAL_ADDR_OPTS), legalHint || "", "fg-addr-head")
+      return `<div class="addr-block">`
+        + pairRow("Address Format", fmtRadios, "Legal Address Type", sel(p + "legalAddressType", m.legalAddressType, LEGAL_ADDR_OPTS), legalHint || "", "fg-addr-head")
         + row("Country <span class=\"req\">*</span>", isoCountrySel(p + "countryCode", m.countryCode || m.country), "取自主信息地址中的国家（中英文均可）")
-        + `<div id="${freeId}" style="display:${fmt === "Fixed" ? "none" : "block"}">`
+        + `<div class="addr-free">`
         + row("Address <span class=\"req\">*</span>", lineInputs, "主信息 Address 全文。最多 5 行，每行 150 字符。中文允许。", "addr-lines")
         + `</div>`
-        + `<div id="${fixId}" style="display:${fmt === "Fixed" ? "block" : "none"}">`
-        + row("Suite", inp(p + "suite", m.suite))
-        + row("Floor", inp(p + "floor", m.floor))
-        + row("Building", inp(p + "building", m.building))
-        + row("Street", inp(p + "street", m.street))
-        + row("District", inp(p + "district", m.district))
-        + row("City <span class=\"req\">*</span>", inp(p + "city", m.city), "选中 Fixed 后各字段为空，须手工填写；City 必填")
-        + row("Country Subentity", inp(p + "countrySubentity", m.countrySubentity))
-        + row("Postal Code", inp(p + "postalCode", m.postalCode))
-        + row("PO Box", inp(p + "poBox", m.poBox))
+        + `<div class="addr-fix">`
+        + row("Street", inp(p + "street", m.street, "", false, 100))
+        + row("Building", inp(p + "building", m.building, "", false, 70))
+        + row("Suite", inp(p + "suite", m.suite, "", false, 40))
+        + row("Floor", inp(p + "floor", m.floor, "", false, 20))
+        + row("District", inp(p + "district", m.district, "", false, 70))
+        + row("PO Box", inp(p + "poBox", m.poBox, "", false, 70))
+        + row("Postal Code", inp(p + "postalCode", m.postalCode, "", false, 35))
+        + row("City <span class=\"req\">*</span>", inp(p + "city", m.city, "", false, 70), "选中 Fixed 后须手工填写；City 必填")
+        + row("Country Subentity", inp(p + "countrySubentity", m.countrySubentity, "", false, 70))
         + row("Remarks", inp(p + "remarks", m.remarks))
-        + `</div>`;
+        + `</div></div>`;
     }
     function birthBlock(p, m, cityHint, countryHint) {
       return row("Date of Birth", inp(p + "birthDate", m.birthDate), "DD/MM/YYYY")
